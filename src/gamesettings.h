@@ -48,7 +48,7 @@ public:
     bool useClassicAudio() { return classicSound; }
     bool colorBlind() { return colorblindBubbles; }
 
-    PlayerKeys player1Keys, player2Keys;
+    PlayerKeys player1Keys, player2Keys, player3Keys, player4Keys, player5Keys;
     void LoadDefaultKeys();
     void SaveKeys();
 

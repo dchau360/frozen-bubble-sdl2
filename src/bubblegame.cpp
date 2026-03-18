@@ -1632,9 +1632,13 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
             acceptInput = false;
         }
 
-        PlayerKeys& keys = (bArray.playerAssigned == 0) ?
-            GameSettings::Instance()->player1Keys :
-            GameSettings::Instance()->player2Keys;
+        GameSettings* gs = GameSettings::Instance();
+        PlayerKeys* allPlayerKeys[5] = {
+            &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+            &gs->player4Keys, &gs->player5Keys
+        };
+        int pIdx = (bArray.playerAssigned >= 0 && bArray.playerAssigned < 5) ? bArray.playerAssigned : 0;
+        PlayerKeys& keys = *allPlayerKeys[pIdx];
 
         if (acceptInput) {
             if (currentSettings.localMultiplayer && bArray.playerAssigned >= 0 && bArray.playerAssigned < 5) {
@@ -1647,8 +1651,8 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
                     bArray.shooterCenter = SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_UP)    != 0;
                     bArray.shooterAction = SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_A)          != 0
                                         || SDL_GameControllerGetButton(ctrl, SDL_CONTROLLER_BUTTON_DPAD_UP)   != 0;
-                } else if (idx == 0) {
-                    // Player 1 fallback: keyboard
+                } else {
+                    // Keyboard fallback for each player
                     bArray.shooterAction = SDL_GetKeyboardState(NULL)[keys.fire];
                     bArray.shooterLeft   = SDL_GetKeyboardState(NULL)[keys.left];
                     bArray.shooterRight  = SDL_GetKeyboardState(NULL)[keys.right];

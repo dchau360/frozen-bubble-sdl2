@@ -428,50 +428,42 @@ void MainMenu::HandleInput(SDL_Event *e){
             // Keys configuration input handling
             if (showingKeysPanel) {
                 if (awaitKp && e->key.keysym.sym != SDLK_ESCAPE) {
-                    // Set the key - allow any key when waiting
-                    // Calculate which player and which key based on overall index
-                    // 0-3: Player 1, 4-7: Player 2
-                    int overallIndex = (keyConfigPlayer - 1) * 4 + keyConfigIndex;
-
-                    if (overallIndex < 4) {
-                        // Player 1 keys
-                        PlayerKeys& keys = GameSettings::Instance()->player1Keys;
-                        switch (keyConfigIndex) {
-                            case 0: keys.left = e->key.keysym.scancode; break;
-                            case 1: keys.right = e->key.keysym.scancode; break;
-                            case 2: keys.fire = e->key.keysym.scancode; break;
-                            case 3: keys.center = e->key.keysym.scancode; break;
-                        }
-                    } else {
-                        // Player 2 keys
-                        PlayerKeys& keys = GameSettings::Instance()->player2Keys;
-                        switch (keyConfigIndex) {
-                            case 0: keys.left = e->key.keysym.scancode; break;
-                            case 1: keys.right = e->key.keysym.scancode; break;
-                            case 2: keys.fire = e->key.keysym.scancode; break;
-                            case 3: keys.center = e->key.keysym.scancode; break;
-                        }
+                    // Set the key for the current player/index
+                    GameSettings* gs = GameSettings::Instance();
+                    PlayerKeys* allKeys[5] = {
+                        &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+                        &gs->player4Keys, &gs->player5Keys
+                    };
+                    PlayerKeys& keys = *allKeys[keyConfigPlayer - 1];
+                    switch (keyConfigIndex) {
+                        case 0: keys.left   = e->key.keysym.scancode; break;
+                        case 1: keys.right  = e->key.keysym.scancode; break;
+                        case 2: keys.fire   = e->key.keysym.scancode; break;
+                        case 3: keys.center = e->key.keysym.scancode; break;
                     }
-
                     awaitKp = false;
                     AudioMixer::Instance()->PlaySFX("typewriter");
                     break;
                 } else if (!awaitKp) {
-                    // Navigation only when NOT waiting for key binding
+                    // UP/DOWN: navigate keys within current player
                     if (e->key.keysym.sym == SDLK_UP) {
-                        // Move up through all 8 entries
-                        int overallIndex = (keyConfigPlayer - 1) * 4 + keyConfigIndex;
-                        overallIndex = (overallIndex == 0) ? 7 : overallIndex - 1;
-                        keyConfigPlayer = (overallIndex < 4) ? 1 : 2;
-                        keyConfigIndex = overallIndex % 4;
+                        keyConfigIndex = (keyConfigIndex == 0) ? 3 : keyConfigIndex - 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_DOWN) {
-                        // Move down through all 8 entries
-                        int overallIndex = (keyConfigPlayer - 1) * 4 + keyConfigIndex;
-                        overallIndex = (overallIndex == 7) ? 0 : overallIndex + 1;
-                        keyConfigPlayer = (overallIndex < 4) ? 1 : 2;
-                        keyConfigIndex = overallIndex % 4;
+                        keyConfigIndex = (keyConfigIndex == 3) ? 0 : keyConfigIndex + 1;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        break;
+                    } else if (e->key.keysym.sym == SDLK_LEFT) {
+                        // Previous player
+                        keyConfigPlayer = (keyConfigPlayer == 1) ? 5 : keyConfigPlayer - 1;
+                        keyConfigIndex = 0;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        break;
+                    } else if (e->key.keysym.sym == SDLK_RIGHT) {
+                        // Next player
+                        keyConfigPlayer = (keyConfigPlayer == 5) ? 1 : keyConfigPlayer + 1;
+                        keyConfigIndex = 0;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_RETURN) {
@@ -1498,45 +1490,35 @@ void MainMenu::KeysPanelRender() {
 
     char keyText[1024];
 
-    PlayerKeys& p1keys = GameSettings::Instance()->player1Keys;
-    PlayerKeys& p2keys = GameSettings::Instance()->player2Keys;
+    GameSettings* gs = GameSettings::Instance();
+    PlayerKeys* allKeys[5] = {
+        &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+        &gs->player4Keys, &gs->player5Keys
+    };
+    PlayerKeys& pk = *allKeys[keyConfigPlayer - 1];
 
-    const char* indicator = awaitKp ? " <--" : " <";
+    const char* indicator = awaitKp ? " <--" : " >";
 
-    // Show all keys in one screen like the original
     snprintf(keyText, sizeof(keyText),
-        "Please enter new keys:\n\n"
-        "%sPlayer 1; turn left?   %s\n"
-        "%sPlayer 1; turn right?  %s\n"
-        "%sPlayer 1; fire?        %s\n"
-        "%sPlayer 1; center?      %s\n\n"
-        "%sPlayer 2; turn left?   %s\n"
-        "%sPlayer 2; turn right?  %s\n"
-        "%sPlayer 2; fire?        %s\n"
-        "%sPlayer 2; center?      %s\n\n"
+        "Key config  Player %d/5\n"
+        "LEFT/RIGHT to switch player\n\n"
+        "%sturn left?   %s\n"
+        "%sturn right?  %s\n"
+        "%sfire?        %s\n"
+        "%scenter?      %s\n\n"
         "%s\n"
-        "Press UP/DOWN to select, ENTER to change\n"
-        "Press ESC when done",
-        keyConfigPlayer == 1 && keyConfigIndex == 0 ? indicator : "",
-        SDL_GetScancodeName(p1keys.left),
-        keyConfigPlayer == 1 && keyConfigIndex == 1 ? indicator : "",
-        SDL_GetScancodeName(p1keys.right),
-        keyConfigPlayer == 1 && keyConfigIndex == 2 ? indicator : "",
-        SDL_GetScancodeName(p1keys.fire),
-        keyConfigPlayer == 1 && keyConfigIndex == 3 ? indicator : "",
-        SDL_GetScancodeName(p1keys.center),
-        keyConfigPlayer == 2 && keyConfigIndex == 0 ? indicator : "",
-        SDL_GetScancodeName(p2keys.left),
-        keyConfigPlayer == 2 && keyConfigIndex == 1 ? indicator : "",
-        SDL_GetScancodeName(p2keys.right),
-        keyConfigPlayer == 2 && keyConfigIndex == 2 ? indicator : "",
-        SDL_GetScancodeName(p2keys.fire),
-        keyConfigPlayer == 2 && keyConfigIndex == 3 ? indicator : "",
-        SDL_GetScancodeName(p2keys.center),
+        "UP/DOWN select, ENTER change\n"
+        "ESC when done",
+        keyConfigPlayer,
+        keyConfigIndex == 0 ? indicator : "  ", SDL_GetScancodeName(pk.left),
+        keyConfigIndex == 1 ? indicator : "  ", SDL_GetScancodeName(pk.right),
+        keyConfigIndex == 2 ? indicator : "  ", SDL_GetScancodeName(pk.fire),
+        keyConfigIndex == 3 ? indicator : "  ", SDL_GetScancodeName(pk.center),
         awaitKp ? "Press any key..." : "");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), keyText, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
+    SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), voidPanelBG, nullptr, &voidPanelRct);
     SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
 }
 
@@ -2253,10 +2235,13 @@ void MainMenu::ShowPanel(int which) {
             panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
             selectedMode = 3;
             break;
-        case 2: // 2p menu
-            showing2PPanel = true;
-            twoPlayerMenuIndex = 0; // Start at chain reaction option
-            selectedMode = 2;
+        case 2: // local multiplayer (2-5 players same keyboard/controller)
+            showingLocalMPPanel = true;
+            localMPMenuIndex = 0;
+            localMPPlayerCount = 2;
+            localMPCR = true;
+            runDelay = false;
+            selectedMode = 7;
             break;
         case 3: { // LAN game - discover servers via UDP broadcast
             isLANGame = true;
