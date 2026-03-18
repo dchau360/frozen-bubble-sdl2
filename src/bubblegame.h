@@ -265,6 +265,12 @@ struct BubbleArray {
     bool mpStickPending = false; // Set to true when we receive 's' message, cleared after sticking
     int stickCx = 0, stickCy = 0, stickCol = 0;  // Stick position and color from 's' message
 
+    // Stick effect animation (original: $sticking_bubble / $pdata{sticking_step})
+    bool stickAnimActive = false;
+    int stickAnimFrame = 0;
+    int stickAnimSlowdown = 0;
+    SDL_Point stickAnimPos = {0, 0};
+
     SDL_Rect compressorRct, lGfxShooterRct, curLaunchRct, nextBubbleRct, onTopRct, frozenBottomRct, hurryRct;
     SDL_Texture *hurryTexture;
     SDL_Point scorePos = {10, 10};  // Score display position (original: $POS{scores})

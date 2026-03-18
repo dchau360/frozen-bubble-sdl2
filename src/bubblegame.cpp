@@ -1972,6 +1972,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
             bArray->PlacePlayerBubble(sBubble.bubbleId, sBubble.chainRow, sBubble.chainCol);
             bArray->newShoot = true;
             audMixer->PlaySFX("stick");
+            bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
+            bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
             sBubble.shouldClear = true; // Now clear it
             CheckPossibleDestroy(*bArray);
             CheckGameState(*bArray);
@@ -1993,6 +1995,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
 
                 sBubble.shouldClear = true;
                 audMixer->PlaySFX("stick");
+                launchArray->stickAnimActive = true; launchArray->stickAnimFrame = 0; launchArray->stickAnimSlowdown = 0;
+                launchArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                 CheckPossibleDestroy(*launchArray);
                 CheckGameState(*launchArray);
                 continue;  // Skip normal collision detection
@@ -2022,6 +2026,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
                 bArray->newShoot = true;
                 audMixer->PlaySFX("stick");
+                bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
+                bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                 sBubble.shouldClear = true;
                 CheckPossibleDestroy(*bArray);
                 CheckGameState(*bArray);
@@ -2055,6 +2061,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                         bArray->PlacePlayerBubble(sBubble.bubbleId, row, col);
                         bArray->newShoot = true;
                         audMixer->PlaySFX("stick");
+                        bArray->stickAnimActive = true; bArray->stickAnimFrame = 0; bArray->stickAnimSlowdown = 0;
+                        bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                         sBubble.shouldClear = true;
                         CheckPossibleDestroy(*bArray);
                         CheckGameState(*bArray);
@@ -2415,14 +2423,12 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
                     totalDestroyed += groupedCount + 1;  // Add to malus count (total including activator)
 
                     for (Bubble *bubble : bubbleCount) {
-                        if(!lowGfx) {
-                            float startX = (float)bubble->pos.x;
-                            float startY = (float)bubble->pos.y;
-                            SingleBubble bubs = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bubble->pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx};
-                            bubs.CopyBubbleProperties(bubble);
-                            bubs.GenerateFreeFall(true);
-                            singleBubbles.push_back(bubs);
-                        }
+                        float startX = (float)bubble->pos.x;
+                        float startY = (float)bubble->pos.y;
+                        SingleBubble bubs = {bArray.playerAssigned, bArray.curLaunch, startX, startY, startX, startY, bubble->pos, {}, bArray.shooterSprite.angle, false, false, bArray.leftLimit, bArray.rightLimit, bArray.topLimit, lowGfx};
+                        bubs.CopyBubbleProperties(bubble);
+                        bubs.GenerateFreeFall(true);
+                        singleBubbles.push_back(bubs);
                         bubble->bubbleId = -1;
                         bubble->playerBubble = false;
                     }
@@ -3426,6 +3432,16 @@ void BubbleGame::Render() {
         SDL_Texture** useBubbles = GetBubbleTextures();
         for (const std::vector<Bubble> &vecBubble : curArray.bubbleMap) for (Bubble bubble : vecBubble) bubble.Render(rend, useBubbles, imgBubblePrelight, imgBubbleFrozen);
 
+        // Stick effect animation (original: $sticking_bubble / sticking_step)
+        if (curArray.stickAnimActive) {
+            SDL_Rect sr = {curArray.stickAnimPos.x - 16, curArray.stickAnimPos.y - 16, 32, 32};
+            SDL_RenderCopy(rend, imgBubbleStick[curArray.stickAnimFrame], nullptr, &sr);
+            if (++curArray.stickAnimSlowdown >= 2) {
+                curArray.stickAnimSlowdown = 0;
+                if (++curArray.stickAnimFrame > BUBBLE_STICKFC) curArray.stickAnimActive = false;
+            }
+        }
+
         if(gameFinish) {
             if (!gameWon && !gameLost) DoFrozenAnimation(curArray, curArray.frozenWait);
 
@@ -3532,7 +3548,18 @@ void BubbleGame::Render() {
                 DoPrelightAnimation(curArray, curArray.prelightTime);
             }
             for (const std::vector<Bubble> &vecBubble : curArray.bubbleMap) for (Bubble bubble : vecBubble) bubble.Render(rend, useBubbles, usePrelight, useFrozen);
-    
+
+            // Stick effect animation (original: $sticking_bubble / sticking_step)
+            if (curArray.stickAnimActive) {
+                SDL_Texture* stickTex = useMini ? imgMiniBubbleStick[curArray.stickAnimFrame] : imgBubbleStick[curArray.stickAnimFrame];
+                int sz = useMini ? 16 : 32;
+                SDL_Rect sr = {curArray.stickAnimPos.x - sz/2, curArray.stickAnimPos.y - sz/2, sz, sz};
+                SDL_RenderCopy(rend, stickTex, nullptr, &sr);
+                if (++curArray.stickAnimSlowdown >= 2) {
+                    curArray.stickAnimSlowdown = 0;
+                    if (++curArray.stickAnimFrame > BUBBLE_STICKFC) curArray.stickAnimActive = false;
+                }
+            }
 
             if(gameFinish) {
                 if (!curArray.mpWinner) DoFrozenAnimation(curArray, curArray.frozenWait);
