@@ -279,6 +279,16 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
 
                                 if (prio) {
                                         // prio e.g. in game; we split messages because p and ! must be treated specially (see game::process_msg_prio)
+                                        // Text protocol commands (FB/x.y CMD) from a prio connection must be handled
+                                        // as text — not broadcast to other players. This allows PART to work mid-game.
+                                        if (strncmp(ptr, "FB/", 3) == 0) {
+                                                eol[0] = '\0';
+                                                if (process_msg(fd, ptr)) {
+                                                        conn_terminated(fd, "process_msg said to shutdown this connection");
+                                                        return;
+                                                }
+                                                break;
+                                        }
                                         process_msg_prio(fd, ptr, eol - ptr + 1);
                                         len -= eol - ptr + 1;
                                         if (len == 0) {

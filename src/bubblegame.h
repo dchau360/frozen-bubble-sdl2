@@ -399,6 +399,7 @@ private:
     bool waitingForOpponentNewGame = false; // Waiting for opponents to press key for new game
     bool opponentReadyForNewGame = false; // Opponent sent 'n' ready signal
     int opponentsReadyCount = 0; // Number of opponents who sent 'n' (for 3+ player)
+    int connectedPlayerCount = 0; // Players still connected (decremented when 'l' received)
 
     int curLevel = 1, pauseFrame = 0, nextPauseUpd = 2, idxMPWinner = 0;
     int winsP1 = 0, winsP2 = 0; // 2p mode stuff

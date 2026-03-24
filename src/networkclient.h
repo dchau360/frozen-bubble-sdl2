@@ -99,6 +99,7 @@ public:
 
     // Game state
     std::vector<GameRoom> GetGameList() { return gameList; }
+    void ClearGameList() { gameList.clear(); openPlayers.clear(); }
     std::vector<NetworkPlayer> GetOpenPlayers() { return openPlayers; }
     std::vector<ChatMessage> GetChatMessages() { return chatMessages; }
     GameRoom* GetCurrentGame() { return currentGame; }
@@ -141,6 +142,9 @@ public:
         auto it = playerIdToNick.find(playerId);
         return (it != playerIdToNick.end()) ? it->second : "";
     }
+
+    // Get all player ID->nick mappings (populated from GAME_CAN_START)
+    const std::map<int, std::string>& GetPlayerIdToNick() const { return playerIdToNick; }
 
     static NetworkClient* Instance(const char* host = nullptr, int port = 0);
     static void Dispose();

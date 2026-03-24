@@ -506,14 +506,16 @@ void MainMenu::HandleInput(SDL_Event *e){
 
             // Handle local multiplayer setup panel navigation
             if (showingLocalMPPanel && !runDelay) {
+                // 0=Players, 1=CR, 2..2+N-1=Colors per player, 2+N=Start
+                int localMaxIdx = 2 + localMPPlayerCount;
                 if (e->key.keysym.sym == SDLK_UP) {
                     localMPMenuIndex--;
-                    if (localMPMenuIndex < 0) localMPMenuIndex = 2;
+                    if (localMPMenuIndex < 0) localMPMenuIndex = localMaxIdx;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
                 } else if (e->key.keysym.sym == SDLK_DOWN) {
                     localMPMenuIndex++;
-                    if (localMPMenuIndex > 2) localMPMenuIndex = 0;
+                    if (localMPMenuIndex > localMaxIdx) localMPMenuIndex = 0;
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
                 } else if (e->key.keysym.sym == SDLK_LEFT || e->key.keysym.sym == SDLK_RIGHT) {
@@ -529,6 +531,16 @@ void MainMenu::HandleInput(SDL_Event *e){
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex >= 2 && localMPMenuIndex < 2 + localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 2;
+                        if (e->key.keysym.sym == SDLK_LEFT) {
+                            playerColorCounts[pi]--;
+                            if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
+                        } else {
+                            playerColorCounts[pi]++;
+                            if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
+                        }
+                        AudioMixer::Instance()->PlaySFX("menu_change");
                     }
                     break;
                 } else if (e->key.keysym.sym == SDLK_RETURN) {
@@ -539,7 +551,12 @@ void MainMenu::HandleInput(SDL_Event *e){
                     } else if (localMPMenuIndex == 1) {
                         localMPCR = !localMPCR;
                         AudioMixer::Instance()->PlaySFX("menu_change");
-                    } else if (localMPMenuIndex == 2) {
+                    } else if (localMPMenuIndex >= 2 && localMPMenuIndex < 2 + localMPPlayerCount) {
+                        int pi = localMPMenuIndex - 2;
+                        playerColorCounts[pi]++;
+                        if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                    } else if (localMPMenuIndex == localMaxIdx) {
                         // Start game!
                         chainReaction = localMPCR;
                         AudioMixer::Instance()->PlaySFX("menu_selected");
@@ -549,8 +566,6 @@ void MainMenu::HandleInput(SDL_Event *e){
                     break;
                 } else if (e->key.keysym.sym == SDLK_ESCAPE) {
                     showingLocalMPPanel = false;
-                    // Return to SP panel only if that's how we got here
-                    // (if entered via 2pgame button, showingSPPanel was already false)
                     AudioMixer::Instance()->PlaySFX("menu_change");
                     break;
                 }
@@ -644,8 +659,11 @@ void MainMenu::HandleInput(SDL_Event *e){
 
                             int maxActions;
                             if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-                                // Host in game - count game settings
-                                maxActions = 5; // Chat + 4 settings
+                                // Host in game: Chat(1) + CR/Continue/Target/Victories(4) + Colors per player + Start(1)
+                                int numPlayers = (int)currentGame->players.size();
+                                if (numPlayers < 1) numPlayers = 1;
+                                if (numPlayers > 5) numPlayers = 5;
+                                maxActions = 5 + numPlayers; // Chat + 4 settings + N color settings
                                 if (currentGame->players.size() > 1) maxActions++; // + Start game
                             } else if (currentGame) {
                                 // Non-host in game
@@ -690,8 +708,11 @@ void MainMenu::HandleInput(SDL_Event *e){
 
                             int maxActions;
                             if (currentGame && currentGame->creator == netClient->GetPlayerNick()) {
-                                // Host in game - count game settings
-                                maxActions = 5; // Chat + 4 settings
+                                // Host in game: Chat(1) + CR/Continue/Target/Victories(4) + Colors per player + Start(1)
+                                int numPlayers = (int)currentGame->players.size();
+                                if (numPlayers < 1) numPlayers = 1;
+                                if (numPlayers > 5) numPlayers = 5;
+                                maxActions = 5 + numPlayers; // Chat + 4 settings + N color settings
                                 if (currentGame->players.size() > 1) maxActions++; // + Start game
                             } else if (currentGame) {
                                 // Non-host in game
@@ -1035,7 +1056,8 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     networkInLobby = true;
                                     networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
                                     networkGameStarting = false;
-                                    lastListRequest = 0;
+                                    netClient->RequestList();  // Immediate list on lobby entry
+                                    lastListRequest = SDL_GetTicks();
 #ifdef __ANDROID__
                                     SDL_AndroidSendMessage(0x8001, 0); // show lobby ad
 #endif
@@ -1126,6 +1148,8 @@ void MainMenu::HandleInput(SDL_Event *e){
                         NetworkClient* netClient = NetworkClient::Instance();
                         if (netClient->GetState() == IN_LOBBY) {
                             netClient->PartGame();
+                            netClient->RequestList();  // Immediate list after parting
+                            lastListRequest = SDL_GetTicks();
                         }
                     }
                     break;
@@ -1178,6 +1202,8 @@ void MainMenu::HandleInput(SDL_Event *e){
                             if (currentGame) {
                                 // Leave the game (like original)
                                 netClient->PartGame();
+                                netClient->RequestList();  // Immediate list after parting
+                                lastListRequest = SDL_GetTicks();
                                 netClient->AddStatusMessage("*** Leaving game...");
                             } else {
                                 // Not in a game - disconnect from server
@@ -1469,23 +1495,31 @@ void MainMenu::LocalMPPanelRender() {
             connected, localMPPlayerCount);
     }
 
-    char pnltxt[512];
-    snprintf(pnltxt, sizeof(pnltxt),
+    char pnltxt[768];
+    int pos = snprintf(pnltxt, sizeof(pnltxt),
         "Local multiplayer\n\n"
         "%s"
         "%s Players: %d\n"
-        "%s Chain-reaction: %s\n"
+        "%s Chain-reaction: %s\n",
+        warningText,
+        localMPMenuIndex == 0 ? ">" : " ",
+        localMPPlayerCount,
+        localMPMenuIndex == 1 ? ">" : " ",
+        localMPCR ? "enabled" : "disabled");
+    for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
+        pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
+            "%s Colors P%d: %d\n",
+            localMPMenuIndex == 2 + pi ? ">" : " ",
+            pi + 1,
+            playerColorCounts[pi]);
+    }
+    snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
         "%s Start game!\n\n"
         "Each player needs a controller.\n"
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
         "Press ESC to cancel",
-        warningText,
-        localMPMenuIndex == 0 ? ">" : " ",
-        localMPPlayerCount,
-        localMPMenuIndex == 1 ? ">" : " ",
-        localMPCR ? "enabled" : "disabled",
-        localMPMenuIndex == 2 ? ">" : " ");
+        localMPMenuIndex == 2 + localMPPlayerCount ? ">" : " ");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), pnltxt, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 130});
@@ -1680,7 +1714,7 @@ void MainMenu::NetPanelRender() {
     if (networkInLobby && netGameBackground && networkInputMode == 0) {
         // Request LIST periodically (every 2 seconds)
         Uint32 now = SDL_GetTicks();
-        if (now - lastListRequest > 2000) {
+        if (now - lastListRequest > 500) {
             netClient->RequestList();
             lastListRequest = now;
         }
@@ -1767,7 +1801,12 @@ void MainMenu::NetPanelRender() {
 
             std::vector<GameRoom> games = netClient->GetGameList();
             for (const auto& game : games) {
-                actions.push_back("Join " + game.creator + "'s game");
+                std::string playerList;
+                for (size_t i = 0; i < game.players.size(); i++) {
+                    if (i > 0) playerList += ", ";
+                    playerList += game.players[i].nick;
+                }
+                actions.push_back("Join " + game.creator + "'s game: " + playerList);
             }
         }
 
@@ -2104,8 +2143,7 @@ void MainMenu::NetPanelRender() {
             // Request LIST periodically (every 2 seconds)
             Uint32 now = SDL_GetTicks();
             Uint32 timeSinceLastRequest = now - lastListRequest;
-            if (timeSinceLastRequest > 2000) {
-                SDL_Log("Requesting LIST from server... (time since last: %u ms)", timeSinceLastRequest);
+            if (timeSinceLastRequest > 500) {
                 netClient->RequestList();
                 lastListRequest = now;
             }
@@ -2161,17 +2199,22 @@ void MainMenu::NetPanelRender() {
                     "  (No games available)\n");
             } else {
                 for (size_t i = 0; i < games.size() && i < 5; i++) {
+                    // Build player names string
+                    std::string playerNames;
+                    for (size_t j = 0; j < games[i].players.size(); j++) {
+                        if (j > 0) playerNames += ", ";
+                        playerNames += games[i].players[j].nick;
+                    }
                     offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
-                        "  %s [%s] - %d player%s\n",
+                        "  %s [%s]: %s\n",
                         i == (size_t)selectedGameIndex ? ">" : " ",
                         games[i].creator.c_str(),
-                        (int)games[i].players.size(),
-                        games[i].players.size() == 1 ? "" : "s");
+                        playerNames.c_str());
                 }
             }
 
             offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
-                "\nPlayers in Lobby (%d):\n", (int)openPlayers.size());
+                "\nIn Lobby (%d):\n", (int)openPlayers.size());
 
             if (openPlayers.empty()) {
                 offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
@@ -2179,9 +2222,7 @@ void MainMenu::NetPanelRender() {
             } else {
                 for (size_t i = 0; i < openPlayers.size() && i < 8; i++) {
                     offset += snprintf(lobbyText + offset, sizeof(lobbyText) - offset,
-                        "  %s%s\n",
-                        openPlayers[i].nick.c_str(),
-                        openPlayers[i].geoloc.empty() ? "" : (" (" + openPlayers[i].geoloc + ")").c_str());
+                        "  %s\n", openPlayers[i].nick.c_str());
                 }
             }
         }
@@ -2359,7 +2400,7 @@ void MainMenu::ShowPanel(int which) {
             networkInputMode = 7; // LAN server list
             break;
         }
-        case 5: { // Net game - fetch public server list
+        case 5: { // Net game - fetch public server list + local server
             isLANGame = false;
             netMenuIndex = 0;
             connectErrorMsg.clear();
@@ -2367,6 +2408,20 @@ void MainMenu::ShowPanel(int which) {
             networkInLobby = false;
             networkInputMode = 10; // Public server list
             publicServers = NetworkClient::FetchPublicServers();
+            // Also add local server if running
+            {
+                bool foundLocal = false;
+                for (const auto& s : publicServers)
+                    if (s.host == "127.0.0.1" || s.host == "localhost") { foundLocal = true; break; }
+                if (!foundLocal && portInUse(1511)) {
+                    ServerInfo localServer;
+                    localServer.host = "127.0.0.1";
+                    localServer.port = 1511;
+                    localServer.name = "Local Server";
+                    localServer.latencyMs = 0;
+                    publicServers.insert(publicServers.begin(), localServer);
+                }
+            }
             for (auto& s : publicServers)
                 s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
             break;
@@ -2437,9 +2492,16 @@ void MainMenu::SetupNewGame(int mode) {
         case 6: // Multiplayer training
             FrozenBubble::Instance()->bubbleGame()->NewGame({chainReaction, 1, false, true, false, 1, true});
             break;
-        case 7: // Local multiplayer (controller-based, 2-4 players)
-            FrozenBubble::Instance()->bubbleGame()->NewGame({localMPCR, localMPPlayerCount, false, true, false, 1, false, true});
+        case 7: { // Local multiplayer (controller-based, 2-4 players)
+            SetupSettings ns7;
+            ns7.chainReaction = localMPCR;
+            ns7.playerCount = localMPPlayerCount;
+            ns7.randomLevels = true;
+            ns7.localMultiplayer = true;
+            for (int i = 0; i < 5; i++) ns7.playerColors[i] = playerColorCounts[i];
+            FrozenBubble::Instance()->bubbleGame()->NewGame(ns7);
             break;
+        }
         default:
             break;
     }
@@ -2481,12 +2543,9 @@ void MainMenu::ReturnToNetLobby() {
             currentGame->creator.clear();
             currentGame->started = false;
         }
-        // Also clear the game list to force a fresh refresh
-        std::vector<GameRoom> emptyList;
-        // Note: We can't directly clear gameList since it's private, but setting state
-        // to CONNECTED and requesting a new LIST will refresh it
-        if (netClient->GetState() == IN_GAME || netClient->GetState() == IN_LOBBY) {
-            netClient->PartGame();  // Part any existing game
+        // If somehow still IN_GAME (BubbleGame normally calls PartGame first), clean up
+        if (netClient->GetState() == IN_GAME) {
+            netClient->PartGame();
         }
     }
 
@@ -2496,6 +2555,14 @@ void MainMenu::ReturnToNetLobby() {
     networkInputMode = 0;
     networkGameStarting = false;
     SDL_StopTextInput();
+
+    // Clear stale game list immediately so ESC-quitter can't see/join the in-progress game
+    // Fresh list arrives shortly from RequestList()
+    if (netClient) netClient->ClearGameList();
+
+    // Request a fresh game/player list so lobby shows current state
+    if (netClient && netClient->IsConnected())
+        netClient->RequestList();
 #ifdef __ANDROID__
     SDL_AndroidSendMessage(0x8001, 0); // show lobby ad on return from game
 #endif

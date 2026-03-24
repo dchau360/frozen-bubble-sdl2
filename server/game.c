@@ -60,7 +60,7 @@ static char ok_pong[] = "PONG";
 static char ok_player_joined[] = "JOINED: %s";
 static char ok_player_parted[] = "PARTED: %s";
 static char ok_player_kicked[] = "KICKED: %s";
-static char ok_talk[] = "TALK: %s";
+static char ok_talk[] = "TALK: %s: %s";
 static char ok_can_start[] = "GAME_CAN_START: %s";
 
 static char wn_unknown_command[] = "UNKNOWN_COMMAND";
@@ -468,7 +468,7 @@ static void talk(int fd, char* msg)
                 return;
         }
 
-        snprintf(talk_msg, sizeof(talk_msg), ok_talk, msg);
+        snprintf(talk_msg, sizeof(talk_msg), ok_talk, nick[fd] ? nick[fd] : "?", msg);
         if (g) {
                 // player is in a game, it's a game-only chat
                 int i;
@@ -931,5 +931,6 @@ void player_part_game_(int fd, char* reason)
                 free(save_nick);
 
                 open_players = g_list_append(open_players, GINT_TO_POINTER(fd));
+                calculate_list_games();  // recalculate now that player is back in open_players
         }
 }

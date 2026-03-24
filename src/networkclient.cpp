@@ -325,7 +325,7 @@ bool NetworkClient::JoinGame(const char* creator) {
         // Wait for server response
         SDL_Delay(50);
 
-        // Check for NICK_IN_USE error
+        // Check for NICK_IN_USE error (retry with different nick)
         if (lastErrorResponse == "NICK_IN_USE") {
             SDL_Log("Nickname '%s' is in use, trying with suffix %d", tryNick.c_str(), suffix);
             char suffixStr[16];
@@ -333,6 +333,12 @@ bool NetworkClient::JoinGame(const char* creator) {
             tryNick = originalNick.substr(0, std::min((size_t)9, originalNick.length())) + suffixStr;
             suffix++;
             continue;
+        }
+
+        // Any other server error (NO_SUCH_GAME, ALREADY_IN_GAME, GAME_FULL, etc.) = fail
+        if (!lastErrorResponse.empty()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "JOIN rejected by server: %s", lastErrorResponse.c_str());
+            return false;
         }
 
         // Success - set up currentGame
@@ -388,7 +394,7 @@ bool NetworkClient::StartGame() {
 
 bool NetworkClient::PartGame() {
     if (SendCommand("PART")) {
-        state = CONNECTED;
+        state = IN_LOBBY;  // Still registered with nick on server, back to lobby
         currentGame = nullptr;
         return true;
     }

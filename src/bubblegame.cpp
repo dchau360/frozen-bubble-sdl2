@@ -724,6 +724,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     attackingMe.clear();
     pendingHighscore = false;
     curLevel = setup.startLevel;
+    connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
 
     // Reset multiplayer training state
     mpTrainScore = 0;
@@ -1125,9 +1126,22 @@ void BubbleGame::NewGame(SetupSettings setup) {
             SDL_Log("Set local player (array 0) lobbyPlayerId = %d, nickname = '%s'",
                     bubbleArrays[0].lobbyPlayerId, bubbleArrays[0].playerNickname.c_str());
 
-            // Remote players' lobbyPlayerIds will be set when we receive messages from them
-            for (int i = 1; i < currentSettings.playerCount; i++) {
-                bubbleArrays[i].lobbyPlayerId = -1;  // Unknown until we receive a message
+            // Pre-populate remote players' lobbyPlayerIds and nicks from GAME_CAN_START mapping
+            // This ensures correct nick targeting for malus messages even before the first shot
+            const auto& idToNick = netClient->GetPlayerIdToNick();
+            int remoteSlot = 1;
+            for (const auto& kv : idToNick) {
+                if (remoteSlot >= currentSettings.playerCount) break;
+                if (kv.first == (int)netClient->GetMyPlayerId()) continue;  // Skip local player
+                bubbleArrays[remoteSlot].lobbyPlayerId = kv.first;
+                bubbleArrays[remoteSlot].playerNickname = kv.second;
+                SDL_Log("Pre-assigned remote player (array %d) lobbyPlayerId = %d, nickname = '%s'",
+                        remoteSlot, kv.first, kv.second.c_str());
+                remoteSlot++;
+            }
+            // Any remaining remote slots are unknown
+            for (int i = remoteSlot; i < currentSettings.playerCount; i++) {
+                bubbleArrays[i].lobbyPlayerId = -1;
                 bubbleArrays[i].playerNickname = "";
             }
         }
@@ -1233,8 +1247,11 @@ void BubbleGame::ReloadGame(int level) {
     attackingMe.clear();
 
     // Reset all players to ALIVE state for new round (especially important for 3-5 player games)
+    // But keep LEFT players as LEFT — they disconnected and can't come back (original: left = 1 persists)
     for (int i = 0; i < currentSettings.playerCount; i++) {
-        bubbleArrays[i].playerState = BubbleArray::PlayerState::ALIVE;
+        if (bubbleArrays[i].playerState != BubbleArray::PlayerState::LEFT) {
+            bubbleArrays[i].playerState = BubbleArray::PlayerState::ALIVE;
+        }
         bubbleArrays[i].mpWinner = false;
         bubbleArrays[i].mpDone = false;
         bubbleArrays[i].penguinSprite.PlayAnimation(0);
@@ -1536,9 +1553,16 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     Penguin &penguin = bArray.penguinSprite;
 
     // Check if we should fire: either local player action or remote player mp_fire flag (original line 2141)
+    // Block local player from firing while malus bubbles are falling (original line 2146: !@{$malus_bubble{$::p}})
+    bool localMalusInFlight = false;
+    if (currentSettings.networkGame && bArray.playerAssigned == 0) {
+        for (const auto& mb : malusBubbles)
+            if (mb.assignedArray == 0 && !mb.shouldClear) { localMalusInFlight = true; break; }
+    }
+
     // For remote players (mp_fire), fire immediately regardless of newShoot state
     // For local players, only fire if newShoot is true (no bubble currently in flight)
-    if(bArray.mpFirePending || (bArray.shooterAction == true && bArray.newShoot == true)) {
+    if(bArray.mpFirePending || (!localMalusInFlight && bArray.shooterAction == true && bArray.newShoot == true)) {
         penguin.sleeping = 0;
         if(penguin.curAnimation != 1) penguin.PlayAnimation(1);
 
@@ -1798,6 +1822,15 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
             bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
             sBubble.shouldClear = true; // Now clear it
             CheckPossibleDestroy(*bArray);
+            // Chain reaction bubble landed — check if more chains are still in flight
+            // before releasing malus (original line 2218: no chain reactions in flight)
+            if (currentSettings.networkGame && bArray->playerAssigned == 0) {
+                bool chainInFlight = false;
+                for (const auto& sb : singleBubbles)
+                    if (!sb.shouldClear && sb.assignedArray == 0 && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                if (!chainInFlight)
+                    ProcessMalusQueue(bubbleArrays[0], frameCount);
+            }
             CheckGameState(*bArray);
             continue;
         }
@@ -1852,6 +1885,15 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                 sBubble.shouldClear = true;
                 CheckPossibleDestroy(*bArray);
+                // Original line 2218-2250: malus generation happens at stick time, only if no chain
+                // reactions are still in flight. We release queued malus here so it falls AFTER the shot sticks.
+                if (currentSettings.networkGame && sBubble.assignedArray == 0) {
+                    bool chainInFlight = false;
+                    for (const auto& sb : singleBubbles)
+                        if (sb.assignedArray == 0 && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                    if (!chainInFlight)
+                        ProcessMalusQueue(bubbleArrays[0], frameCount);
+                }
                 CheckGameState(*bArray);
                 goto STOP_ITER;
             }
@@ -1887,6 +1929,14 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                         bArray->stickAnimPos = {(int)sBubble.pos.x, (int)sBubble.pos.y};
                         sBubble.shouldClear = true;
                         CheckPossibleDestroy(*bArray);
+                        // Release queued malus at stick time (original line 2218-2250)
+                        if (currentSettings.networkGame && sBubble.assignedArray == 0) {
+                            bool chainInFlight = false;
+                            for (const auto& sb : singleBubbles)
+                                if (sb.assignedArray == 0 && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                            if (!chainInFlight)
+                                ProcessMalusQueue(bubbleArrays[0], frameCount);
+                        }
                         CheckGameState(*bArray);
                         goto STOP_ITER;
                     }
@@ -1955,7 +2005,8 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
 
             malus.shouldClear = true;
             CheckPossibleDestroy(*malusArray);
-            CheckGameState(*malusArray);
+            // Original uses real_stick_bubble() for malus sticking (line 2505/2514),
+            // which does NOT increment the newroot counter. Do NOT call CheckGameState here.
         }
     }
 
@@ -2295,6 +2346,23 @@ void BubbleGame::CheckPossibleDestroy(BubbleArray &bArray){
             SDL_Log("Awarding %d malus to opponent (%d destroyed + %d falling - 2)",
                     malusValue, totalDestroyed, fallingCount);
             SendMalusToOpponent(malusValue);
+        } else if (!currentSettings.networkGame && currentSettings.playerCount >= 2) {
+            // Local multiplayer: distribute malus directly to all other living players' queues
+            int attackerIdx = bArray.playerAssigned;
+            int livingOpponents = 0;
+            for (int i = 0; i < currentSettings.playerCount; i++)
+                if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE)
+                    livingOpponents++;
+            if (livingOpponents > 0) {
+                int malusEach = (malusValue + livingOpponents - 1) / livingOpponents;
+                for (int i = 0; i < currentSettings.playerCount; i++) {
+                    if (i != attackerIdx && bubbleArrays[i].playerState == BubbleArray::PlayerState::ALIVE) {
+                        for (int m = 0; m < malusEach; m++)
+                            bubbleArrays[i].malusQueue.push_back(frameCount);
+                        SDL_Log("Local malus: %d bubbles queued for player %d", malusEach, i);
+                    }
+                }
+            }
         }
     }
 }
@@ -3193,11 +3261,18 @@ void BubbleGame::Render() {
             }
         }
 
-        // Process malus queue for both players (generate attack bubbles)
-        frameCount++;  // Increment global frame counter
-        ProcessMalusQueue(bubbleArrays[0], frameCount);  // Local player
-        // Note: We don't call ProcessMalusQueue for opponent (array 1) because they
-        // generate their own malus bubbles and send us 'm' messages
+        // Increment global frame counter (used by malus timing)
+        frameCount++;
+        // NOTE: ProcessMalusQueue for local player is called inside the stick handler
+        // (after bubble sticks), matching original Perl behavior at line 2217-2258.
+        // This ensures malus only falls AFTER the local player fires and their bubble sticks.
+    }
+
+    // Local multiplayer: process malus queues for all players each frame
+    if (!currentSettings.networkGame && currentSettings.playerCount >= 2 && !gameFinish) {
+        frameCount++;
+        for (int i = 0; i < currentSettings.playerCount; i++)
+            ProcessMalusQueue(bubbleArrays[i], frameCount);
     }
 
     // Multiplayer training mode: periodically inject random malus, enforce 2-min timer
@@ -3793,6 +3868,12 @@ void BubbleGame::HandleInput(SDL_Event *e) {
 
                     // In network game, synchronize new game with opponent
                     if (currentSettings.networkGame) {
+                        // If all opponents have disconnected, no one to play with - return to lobby
+                        if (connectedPlayerCount <= 1) {
+                            SDL_Log("No connected opponents remain - returning to lobby");
+                            QuitToTitle();
+                            break;
+                        }
                         // Send 'n' and start waiting - render loop will start game when both ready
                         // Guard: don't send 'n' again if already waiting (prevents double-counting at peers)
                         if (!waitingForOpponentNewGame) {
@@ -3806,7 +3887,7 @@ void BubbleGame::HandleInput(SDL_Event *e) {
                                 // already arrived before we pressed ENTER, and resetting would lose them.
                                 // The count is reset in the render loop when the new game actually starts.
                                 SDL_Log("Waiting for all opponents to be ready (already have %d/%d)...",
-                                        opponentsReadyCount, currentSettings.playerCount - 1);
+                                        opponentsReadyCount, connectedPlayerCount - 1);
                             }
                         }
                     } else {
@@ -3983,8 +4064,8 @@ void BubbleGame::ProcessNetworkMessages() {
                         // Newgame - an opponent is ready for next round
                         opponentsReadyCount++;
                         SDL_Log("Opponent ready for new game (received 'n'), count=%d/%d",
-                                opponentsReadyCount, currentSettings.playerCount - 1);
-                        if (opponentsReadyCount >= currentSettings.playerCount - 1) {
+                                opponentsReadyCount, connectedPlayerCount - 1);
+                        if (opponentsReadyCount >= connectedPlayerCount - 1) {
                             opponentReadyForNewGame = true;
                         }
 
@@ -4267,8 +4348,12 @@ void BubbleGame::ProcessNetworkMessages() {
                         break;
                     }
                     case 'l': {
-                        // Lost/Death notification - remote player died
-                        SDL_Log("Received death notification from lobby player ID %d", senderId);
+                        // Player-left notification: a remote player disconnected mid-game
+                        SDL_Log("Received player-left ('l') from lobby player ID %d", senderId);
+
+                        // Track that one fewer player is connected (for new-game sync threshold)
+                        if (connectedPlayerCount > 1) connectedPlayerCount--;
+                        SDL_Log("connectedPlayerCount now %d", connectedPlayerCount);
 
                         // Find which player array this senderId corresponds to
                         int playerIdx = -1;
@@ -4280,8 +4365,8 @@ void BubbleGame::ProcessNetworkMessages() {
                         }
 
                         if (playerIdx >= 0) {
-                            SDL_Log("Marking player array %d (lobbyId=%d) as LOST", playerIdx, senderId);
-                            bubbleArrays[playerIdx].playerState = BubbleArray::PlayerState::LOST;
+                            SDL_Log("Marking player array %d (lobbyId=%d) as LEFT (disconnected)", playerIdx, senderId);
+                            bubbleArrays[playerIdx].playerState = BubbleArray::PlayerState::LEFT;
                             bubbleArrays[playerIdx].penguinSprite.PlayAnimation(11);
 
                             // Clear targeting if targeted player died (original: set_sendmalustoone(undef) at line 1947)
@@ -4294,7 +4379,7 @@ void BubbleGame::ProcessNetworkMessages() {
 
                             // Check if we have a winner now
                             int livingCount = CountLivingPlayers();
-                            SDL_Log("After remote death: %d players alive", livingCount);
+                            SDL_Log("After remote disconnect: %d players alive", livingCount);
 
                             if (livingCount == 1) {
                                 // Find winner
@@ -4315,7 +4400,14 @@ void BubbleGame::ProcessNetworkMessages() {
                             }
                         } else {
                             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                       "Received death notification from unknown player ID %d", senderId);
+                                       "Received player-left from unknown player ID %d", senderId);
+                        }
+
+                        // If already waiting for new-game sync, check if the reduced threshold is now met
+                        // (the disconnected player will never send 'n', so count them as ready)
+                        if (waitingForOpponentNewGame && opponentsReadyCount >= connectedPlayerCount - 1) {
+                            SDL_Log("All remaining connected opponents ready after disconnect - starting new game");
+                            opponentReadyForNewGame = true;
                         }
                         break;
                     }
