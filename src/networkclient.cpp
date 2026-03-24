@@ -1484,26 +1484,34 @@ std::string NetworkClient::DetectGeoLocation() {
     return "zz";
 #endif
 
-    const char* url = "https://ip-api.com/line/?fields=lat,lon";
+    // Try ipinfo.io/loc (HTTPS, returns "lat,lon") then fall back to ip-api.com (HTTP)
+    const char* urls[] = {
+        "https://ipinfo.io/loc",
+        "http://ip-api.com/line/?fields=lat,lon"
+    };
     std::string body;
 
+    for (const char* url : urls) {
+        body.clear();
 #ifdef __ANDROID__
-    body = androidFetchUrl(url);
+        body = androidFetchUrl(url);
 #else
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
-    FILE* fp = popen(cmd, "r");
-    if (fp) {
-        char buf[64];
-        while (fgets(buf, sizeof(buf), fp)) body += buf;
-        pclose(fp);
-    }
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+        FILE* fp = popen(cmd, "r");
+        if (fp) {
+            char buf[64];
+            while (fgets(buf, sizeof(buf), fp)) body += buf;
+            pclose(fp);
+        }
 #endif
+        if (!body.empty()) break;
+    }
 
-    // Response is two lines: latitude\nlongitude
+    // Handles both "lat,lon" (ipinfo) and "lat\nlon" (ip-api)
     float lat = 0.0f, lon = 0.0f;
-    if (sscanf(body.c_str(), "%f %f", &lat, &lon) == 2 ||
-        sscanf(body.c_str(), "%f\n%f", &lat, &lon) == 2) {
+    if (sscanf(body.c_str(), "%f,%f", &lat, &lon) == 2 ||
+        sscanf(body.c_str(), "%f %f", &lat, &lon) == 2) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.1f:%.1f", lat, lon);
         // Ensure within 13 char server limit
