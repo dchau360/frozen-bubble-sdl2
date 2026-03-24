@@ -55,6 +55,14 @@ add_subdirectory("${JNI_DIR}/SDL2_image" SDL2_image_build)
 add_subdirectory("${JNI_DIR}/SDL2_mixer" SDL2_mixer_build)
 add_subdirectory("${JNI_DIR}/SDL2_ttf"   SDL2_ttf_build)
 
+# Generate SDL2/ prefix wrapper headers so <SDL2/SDL_mixer.h> etc. work.
+# Extension lib sources expose SDL_mixer.h (no prefix), but game source uses <SDL2/...>.
+set(SDL2_EXT_WRAPPERS "${CMAKE_BINARY_DIR}/sdl2_ext_wrappers")
+file(MAKE_DIRECTORY "${SDL2_EXT_WRAPPERS}/SDL2")
+file(WRITE "${SDL2_EXT_WRAPPERS}/SDL2/SDL_image.h" "#pragma once\n#include <SDL_image.h>\n")
+file(WRITE "${SDL2_EXT_WRAPPERS}/SDL2/SDL_mixer.h" "#pragma once\n#include <SDL_mixer.h>\n")
+file(WRITE "${SDL2_EXT_WRAPPERS}/SDL2/SDL_ttf.h"   "#pragma once\n#include <SDL_ttf.h>\n")
+
 # iniparser static lib (vendored in jni/iniparser)
 add_library(iniparser STATIC
     "${JNI_DIR}/iniparser/iniparser.c"
@@ -87,7 +95,8 @@ target_compile_definitions(main PRIVATE
 
 target_include_directories(main PRIVATE
     ../../src
-    "${JNI_DIR}/include"       # Unified include dir with SDL2/ subdir for <SDL2/SDL*.h>
+    "${SDL2_EXT_WRAPPERS}"     # Generated SDL2/ wrappers: <SDL2/SDL_mixer.h> → <SDL_mixer.h>
+    "${JNI_DIR}/include"       # SDL2 core headers with SDL2/ subdir
 )
 
 target_link_libraries(main

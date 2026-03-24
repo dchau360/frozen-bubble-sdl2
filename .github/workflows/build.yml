@@ -128,7 +128,6 @@ jobs:
             --icon-size 128 \
             --icon "FrozenBubble.app" 140 190 \
             --app-drop-link 400 190 \
-            --icon-file "share/icons/frozen-bubble-icon-64x64.png" \
             "frozen-bubble-macos.dmg" \
             "dist/"
 
@@ -160,7 +159,6 @@ jobs:
             mingw-w64-x86_64-SDL2_image
             mingw-w64-x86_64-SDL2_mixer
             mingw-w64-x86_64-SDL2_ttf
-            mingw-w64-x86_64-iniparser
 
       - name: Configure & build
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

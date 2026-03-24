@@ -19,7 +19,17 @@ find_package(SDL2_image REQUIRED)
 find_package(SDL2_mixer REQUIRED)
 find_package(SDL2_ttf REQUIRED)
 
-find_package(iniparser REQUIRED static)
+find_package(iniparser QUIET static)
+if(NOT iniparser_FOUND OR NOT TARGET iniparser-static)
+    message(STATUS "iniparser system package not found, building from bundled source")
+    add_library(iniparser-static STATIC
+        "${CMAKE_SOURCE_DIR}/third_party/iniparser/iniparser.c"
+        "${CMAKE_SOURCE_DIR}/third_party/iniparser/dictionary.c"
+    )
+    target_include_directories(iniparser-static PUBLIC
+        "${CMAKE_SOURCE_DIR}/third_party/iniparser"
+    )
+endif()
 
 if(NOT SDL2_image_FOUND)
     message(FATAL_ERROR "SDL2_image not found")
