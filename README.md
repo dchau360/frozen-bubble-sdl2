@@ -159,8 +159,6 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 - [ ] Implement single-player malus targeting to match original Perl behavior
 - [ ] Polish network lobby room/player list layout
 - [ ] WebAssembly: implement public server fetch via `emscripten_fetch`
-- [ ] Per-player option to disable bubble row compression (rows dropping down)
-- [ ] Per-player option to enable bubble aim guide (trajectory assistance)
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
 
