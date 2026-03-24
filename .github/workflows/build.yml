@@ -42,6 +42,7 @@ jobs:
 
       - name: Write .desktop and icon
         run: |
+          mkdir -p AppDir/usr/share/applications
           cat > AppDir/usr/share/applications/frozen-bubble.desktop << 'EOF'
           [Desktop Entry]
           Name=Frozen Bubble
