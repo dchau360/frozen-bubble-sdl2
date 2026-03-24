@@ -1271,8 +1271,13 @@ int NetworkClient::MeasureLatency(const char* host, int port, int timeoutMs) {
     int s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (s < 0) { freeaddrinfo(res); return -1; }
 
+#ifdef _WIN32
+    u_long nonblocking = 1;
+    ioctlsocket(s, FIONBIO, &nonblocking);
+#else
     int flags = fcntl(s, F_GETFL, 0);
     fcntl(s, F_SETFL, flags | O_NONBLOCK);
+#endif
 
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
@@ -1283,7 +1288,7 @@ int NetworkClient::MeasureLatency(const char* host, int port, int timeoutMs) {
     fd_set wfds; FD_ZERO(&wfds); FD_SET(s, &wfds);
     struct timeval tv{ timeoutMs / 1000, (timeoutMs % 1000) * 1000 };
     bool ok = (select(s + 1, nullptr, &wfds, nullptr, &tv) > 0);
-    close(s);
+    SOCKET_CLOSE(s);
 
     if (!ok) return -1;
 

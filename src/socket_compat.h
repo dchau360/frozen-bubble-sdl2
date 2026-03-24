@@ -30,6 +30,10 @@ typedef int ssize_t;
 #  ifndef MSG_DONTWAIT
 #    define MSG_DONTWAIT 0
 #  endif
+// MSG_NOSIGNAL is POSIX-only; Windows doesn't send SIGPIPE so this is a no-op
+#  ifndef MSG_NOSIGNAL
+#    define MSG_NOSIGNAL 0
+#  endif
 // setsockopt on Windows requires (const char*) optval
 #  define SETSOCKOPT_OPTVAL(v) (reinterpret_cast<const char*>(&(v)))
 // Use SOCKET_CLOSE() instead of close() to avoid macro conflicts with POSIX headers
