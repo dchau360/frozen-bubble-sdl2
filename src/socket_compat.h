@@ -10,8 +10,6 @@
 #  endif
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
-// Map POSIX socket close → Winsock closesocket
-#  define close(s) closesocket(s)
 // Map POSIX EAGAIN/EWOULDBLOCK to Winsock equivalent
 #  ifndef EAGAIN
 #    define EAGAIN WSAEWOULDBLOCK
@@ -19,22 +17,28 @@
 #  ifndef EWOULDBLOCK
 #    define EWOULDBLOCK WSAEWOULDBLOCK
 #  endif
-// socklen_t is not defined in older MinGW
+// socklen_t may not be defined in older MinGW
+#  ifndef socklen_t
 typedef int socklen_t;
-// ssize_t is POSIX-only
+#  endif
+// ssize_t is POSIX-only; guard against MinGW defining it elsewhere
+#  if !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
 typedef int ssize_t;
+#    define _SSIZE_T_DEFINED
+#  endif
 // MSG_DONTWAIT is POSIX-only; on Windows use non-blocking mode via ioctlsocket
 #  ifndef MSG_DONTWAIT
 #    define MSG_DONTWAIT 0
 #  endif
 // setsockopt on Windows requires (const char*) optval
 #  define SETSOCKOPT_OPTVAL(v) (reinterpret_cast<const char*>(&(v)))
+// Use SOCKET_CLOSE() instead of close() to avoid macro conflicts with POSIX headers
+#  define SOCKET_CLOSE(s) closesocket(s)
 // Helper: retrieve last socket error (errno doesn't work for Winsock calls)
 #  define SOCK_ERRNO WSAGetLastError()
 #  define SOCK_WOULD_BLOCK(e) ((e) == WSAEWOULDBLOCK)
 // INVALID_SOCKET already defined by winsock2
 // Inline WSA init helper — call once before first socket use
-#include <cstdio>
 inline bool socket_init() {
     WSADATA wsa;
     return WSAStartup(MAKEWORD(2,2), &wsa) == 0;
@@ -46,6 +50,7 @@ inline void socket_cleanup() { WSACleanup(); }
 #  include <arpa/inet.h>
 #  include <unistd.h>
 #  include <fcntl.h>
+#  define SOCKET_CLOSE(s) close(s)
 #  define SETSOCKOPT_OPTVAL(v) (&(v))
 #  define SOCK_ERRNO errno
 #  define SOCK_WOULD_BLOCK(e) ((e) == EAGAIN || (e) == EWOULDBLOCK)

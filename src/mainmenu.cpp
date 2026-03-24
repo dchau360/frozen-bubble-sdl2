@@ -25,23 +25,25 @@
 #include "platform.h"
 
 #include <SDL2/SDL_image.h>
+#include <cstring>
+#include <errno.h>
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <cstring>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <errno.h>
-
+#endif
+#include "socket_compat.h"
+#ifndef _WIN32
 #ifndef __WASM_PORT__
-// These headers are not available in WebAssembly builds
 #include <netdb.h>
+#endif
 #endif
 
 // Returns true if something is already listening on localhost:port
 static bool portInUse(int port) {
+#ifdef _WIN32
+    return false; // Server auto-start not supported on Windows
+#else
     int s = socket(AF_INET, SOCK_STREAM, 0);
     if (s < 0) return false;
     struct sockaddr_in addr{};
@@ -54,8 +56,9 @@ static bool portInUse(int port) {
     fd_set wfds; FD_ZERO(&wfds); FD_SET(s, &wfds);
     struct timeval tv{0, 200000}; // 200ms
     bool inUse = (select(s + 1, nullptr, &wfds, nullptr, &tv) > 0);
-    close(s);
+    SOCKET_CLOSE(s);
     return inUse;
+#endif
 }
 
 inline int ranrange(int a, int b) { return a + rand() % ((b - a ) + 1); }
@@ -2379,11 +2382,11 @@ void MainMenu::ReturnToNetLobby() {
 }
 
 void MainMenu::StartLocalServer() {
-#if defined(__ANDROID__) || defined(__WASM_PORT__)
+#if defined(__ANDROID__) || defined(__WASM_PORT__) || defined(_WIN32)
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot host server on this platform");
     connectErrorMsg = "Server hosting not available on this platform";
     return;
-#endif
+#else
     if (serverHosting) {
         SDL_Log("Server already running");
         return;
@@ -2467,22 +2470,21 @@ void MainMenu::StartLocalServer() {
     }
 
     SDL_Log("Server started with PID %d on port %d", serverPid, networkPort);
+#endif // !_WIN32 && !__ANDROID__ && !__WASM_PORT__
 }
 
 void MainMenu::StopLocalServer() {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__WASM_PORT__) || defined(_WIN32)
     return;
-#endif
+#else
     if (!serverHosting || serverPid <= 0) {
         return;
     }
 
     SDL_Log("Stopping local server (PID %d)...", serverPid);
 
-    // Send SIGTERM to server
     kill(serverPid, SIGTERM);
 
-    // Wait for server to exit (non-blocking)
     int status;
     waitpid(serverPid, &status, WNOHANG);
 
@@ -2490,4 +2492,5 @@ void MainMenu::StopLocalServer() {
     serverHosting = false;
 
     SDL_Log("Server stopped");
+#endif
 }

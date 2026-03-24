@@ -96,7 +96,7 @@ bool NetworkClient::Connect(const char* host, int port) {
 
     if (inet_pton(AF_INET, host, &serverAddr.sin_addr) <= 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Invalid address: %s", host);
-        close(sockfd);
+        SOCKET_CLOSE(sockfd);
         sockfd = -1;
         return false;
     }
@@ -107,7 +107,7 @@ bool NetworkClient::Connect(const char* host, int port) {
 
     if (result < 0) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to connect: %d", SOCK_ERRNO);
-        close(sockfd);
+        SOCKET_CLOSE(sockfd);
         sockfd = -1;
         state = DISCONNECTED;
         return false;
@@ -153,7 +153,7 @@ bool NetworkClient::Connect(const char* host, int port) {
 
     if (!gotServerReady) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Did not receive SERVER_READY");
-        close(sockfd);
+        SOCKET_CLOSE(sockfd);
         sockfd = -1;
         state = DISCONNECTED;
         return false;
@@ -167,7 +167,7 @@ bool NetworkClient::Connect(const char* host, int port) {
 void NetworkClient::Disconnect() {
     SDL_Log("!!! DISCONNECT CALLED - State was: %d, sockfd: %d", state, sockfd);
     if (sockfd >= 0) {
-        close(sockfd);
+        SOCKET_CLOSE(sockfd);
         sockfd = -1;
     }
     state = DISCONNECTED;
@@ -1239,7 +1239,7 @@ std::vector<ServerInfo> NetworkClient::DiscoverLANServers() {
         }
     }
 
-    close(udpSock);
+    SOCKET_CLOSE(udpSock);
 
     // UDP broadcast doesn't reach loopback — also probe 127.0.0.1 directly
     // so a locally-hosted server appears in the LAN list
