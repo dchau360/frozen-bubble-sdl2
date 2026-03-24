@@ -168,5 +168,5 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ## Credits
 
-Original Frozen Bubble by [Glenn Sanson et al.](http://www.frozen-bubble.org/) — GPL licensed.
+Original Frozen Bubble by [Guillaume Cottenceau et al.](http://www.frozen-bubble.org/) — GPL licensed.
 This port is independently developed and not affiliated with the original project.

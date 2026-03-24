@@ -663,7 +663,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
                                 if (numPlayers > 5) numPlayers = 5;
-                                maxActions = 5 + numPlayers; // Chat + 4 settings + N color settings
+                                maxActions = 5 + 3 * numPlayers; // Chat + 4 settings + N*3 per-player settings
                                 if (currentGame->players.size() > 1) maxActions++; // + Start game
                             } else if (currentGame) {
                                 // Non-host in game
@@ -712,7 +712,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
                                 if (numPlayers > 5) numPlayers = 5;
-                                maxActions = 5 + numPlayers; // Chat + 4 settings + N color settings
+                                maxActions = 5 + 3 * numPlayers; // Chat + 4 settings + N*3 per-player settings
                                 if (currentGame->players.size() > 1) maxActions++; // + Start game
                             } else if (currentGame) {
                                 // Non-host in game
@@ -763,12 +763,12 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 AudioMixer::Instance()->PlaySFX("menu_change");
                                 settingChanged = true;
                             } else if (selectedActionIndex >= 5) {
-                                // Per-player color count entries (indices 5..5+N-1)
                                 int numPlayers = (int)currentGame->players.size();
                                 if (numPlayers < 1) numPlayers = 1;
                                 if (numPlayers > 5) numPlayers = 5;
-                                int pi = selectedActionIndex - 5;
-                                if (pi < numPlayers) {
+                                if (selectedActionIndex < 5 + numPlayers) {
+                                    // Per-player color count (indices 5..5+N-1)
+                                    int pi = selectedActionIndex - 5;
                                     if (e->key.keysym.sym == SDLK_LEFT) {
                                         playerColorCounts[pi]--;
                                         if (playerColorCounts[pi] < 5) playerColorCounts[pi] = 8;
@@ -778,12 +778,24 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     }
                                     AudioMixer::Instance()->PlaySFX("menu_change");
                                     settingChanged = true;
+                                } else if (selectedActionIndex < 5 + 2 * numPlayers) {
+                                    // Per-player compression toggle (indices 5+N..5+2N-1)
+                                    int pi = selectedActionIndex - (5 + numPlayers);
+                                    playerNoCompress[pi] = !playerNoCompress[pi];
+                                    AudioMixer::Instance()->PlaySFX("menu_change");
+                                    settingChanged = true;
+                                } else if (selectedActionIndex < 5 + 3 * numPlayers) {
+                                    // Per-player aim guide toggle (indices 5+2N..5+3N-1)
+                                    int pi = selectedActionIndex - (5 + 2 * numPlayers);
+                                    playerAimGuide[pi] = !playerAimGuide[pi];
+                                    AudioMixer::Instance()->PlaySFX("menu_change");
+                                    settingChanged = true;
                                 }
                             }
                             if (settingChanged) {
                                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                 netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts);
+                                    singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide);
                             }
                         }
                     }
@@ -873,7 +885,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     int numPlayers = currentGame ? (int)currentGame->players.size() : 1;
                                     if (numPlayers < 1) numPlayers = 1;
                                     if (numPlayers > 5) numPlayers = 5;
-                                    int startIdx = 5 + numPlayers; // Start game index
+                                    int startIdx = 5 + 3 * numPlayers; // Start game index
                                     bool settingChanged = false;
                                     if (selectedActionIndex == 1) {
                                         // Toggle chain reaction
@@ -903,6 +915,18 @@ void MainMenu::HandleInput(SDL_Event *e){
                                         if (playerColorCounts[pi] > 8) playerColorCounts[pi] = 5;
                                         AudioMixer::Instance()->PlaySFX("menu_change");
                                         settingChanged = true;
+                                    } else if (selectedActionIndex >= 5 + numPlayers && selectedActionIndex < 5 + 2 * numPlayers) {
+                                        // Toggle per-player compression (Enter toggles)
+                                        int pi = selectedActionIndex - (5 + numPlayers);
+                                        playerNoCompress[pi] = !playerNoCompress[pi];
+                                        AudioMixer::Instance()->PlaySFX("menu_change");
+                                        settingChanged = true;
+                                    } else if (selectedActionIndex >= 5 + 2 * numPlayers && selectedActionIndex < 5 + 3 * numPlayers) {
+                                        // Toggle per-player aim guide (Enter toggles)
+                                        int pi = selectedActionIndex - (5 + 2 * numPlayers);
+                                        playerAimGuide[pi] = !playerAimGuide[pi];
+                                        AudioMixer::Instance()->PlaySFX("menu_change");
+                                        settingChanged = true;
                                     } else if (selectedActionIndex == startIdx && currentGame && currentGame->players.size() > 1) {
                                         // Start game (only shown if >1 player)
                                         netClient->StartGame();
@@ -912,7 +936,7 @@ void MainMenu::HandleInput(SDL_Event *e){
                                     if (settingChanged) {
                                         static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                                         netClient->SendOptions(chainReactionEnabled, continueWhenPlayersLeave,
-                                            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts);
+                                            singlePlayerTargetting, vLimits[victoriesLimitIndex], playerColorCounts, playerNoCompress, playerAimGuide);
                                     }
                                 }
                                 // Non-host has no actions other than Chat (use ESC to leave)
@@ -1667,8 +1691,8 @@ void MainMenu::NetPanelRender() {
 
         // Apply any options broadcast by the host (joiners receive SETOPTIONS push)
         {
-            bool cr, cl, st; int vl; int pc[5];
-            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc)) {
+            bool cr, cl, st; int vl; int pc[5]; bool nc[5]; bool ag[5];
+            if (netClient->GetAndClearPendingOptions(cr, cl, st, vl, pc, nc, ag)) {
                 chainReactionEnabled = cr;
                 continueWhenPlayersLeave = cl;
                 singlePlayerTargetting = st;
@@ -1676,7 +1700,7 @@ void MainMenu::NetPanelRender() {
                 static const int vLimits[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,15,20,30,50,100};
                 victoriesLimitIndex = 5; // default
                 for (int i = 0; i < 18; i++) { if (vLimits[i] == vl) { victoriesLimitIndex = i; break; } }
-                for (int i = 0; i < 5; i++) playerColorCounts[i] = pc[i];
+                for (int i = 0; i < 5; i++) { playerColorCounts[i] = pc[i]; playerNoCompress[i] = nc[i]; playerAimGuide[i] = ag[i]; }
                 SDL_Log("Applied host options: cr=%d cl=%d st=%d vl=%d colors=%d,%d,%d,%d,%d",
                     cr,cl,st,vl,pc[0],pc[1],pc[2],pc[3],pc[4]);
             }
@@ -1762,6 +1786,20 @@ void MainMenu::NetPanelRender() {
                     snprintf(colorText, sizeof(colorText), "Colors %s: %d", pnick.c_str(), playerColorCounts[pi]);
                     actions.push_back(colorText);
                 }
+                // Per-player compression toggle (indices 5+N..5+2N-1)
+                for (int pi = 0; pi < numPlayers; pi++) {
+                    char compText[80];
+                    std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
+                    snprintf(compText, sizeof(compText), "No compression %s: %s", pnick.c_str(), playerNoCompress[pi] ? "on" : "off");
+                    actions.push_back(compText);
+                }
+                // Per-player aim guide toggle (indices 5+2N..5+3N-1)
+                for (int pi = 0; pi < numPlayers; pi++) {
+                    char aimText[80];
+                    std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
+                    snprintf(aimText, sizeof(aimText), "Aim guide %s: %s", pnick.c_str(), playerAimGuide[pi] ? "on" : "off");
+                    actions.push_back(aimText);
+                }
 
                 // Only show Start game if there are other players
                 if (currentGame->players.size() > 1) {
@@ -1791,6 +1829,19 @@ void MainMenu::NetPanelRender() {
                     std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
                     snprintf(colorText, sizeof(colorText), "Colors %s: %d", pnick.c_str(), playerColorCounts[pi]);
                     actions.push_back(colorText);
+                }
+                // Per-player compression and aim guide (read-only)
+                for (int pi = 0; pi < numPlayers; pi++) {
+                    char compText[80];
+                    std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
+                    snprintf(compText, sizeof(compText), "No compression %s: %s", pnick.c_str(), playerNoCompress[pi] ? "on" : "off");
+                    actions.push_back(compText);
+                }
+                for (int pi = 0; pi < numPlayers; pi++) {
+                    char aimText[80];
+                    std::string pnick = (pi < (int)currentGame->players.size()) ? currentGame->players[pi].nick : std::to_string(pi + 1);
+                    snprintf(aimText, sizeof(aimText), "Aim guide %s: %s", pnick.c_str(), playerAimGuide[pi] ? "on" : "off");
+                    actions.push_back(aimText);
                 }
             }
             // No "Part game" menu item - use ESC key to leave like original
@@ -2481,7 +2532,11 @@ void MainMenu::SetupNewGame(int mode) {
                 ns.networkGame = true;
                 ns.randomLevels = true;
                 ns.singlePlayerTargetting = singlePlayerTargetting;
-                for (int i = 0; i < 5; i++) ns.playerColors[i] = playerColorCounts[i];
+                for (int i = 0; i < 5; i++) {
+                    ns.playerColors[i] = playerColorCounts[i];
+                    ns.disableCompression[i] = playerNoCompress[i];
+                    ns.aimGuide[i] = playerAimGuide[i];
+                }
                 FrozenBubble::Instance()->bubbleGame()->NewGame(ns);
             }
             break;

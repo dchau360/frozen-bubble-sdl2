@@ -119,7 +119,7 @@ public:
     void AddStatusMessage(const std::string& message);
 
     // Send game options to other players (host only)
-    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5]);
+    bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5]);
 
     // Received options from host (updated when SETOPTIONS push arrives)
     bool pendingOptions = false;
@@ -128,12 +128,14 @@ public:
     bool rcvSingleTarget = true;
     int rcvVictoriesLimit = 5;
     int rcvPlayerColors[5] = {7, 7, 7, 7, 7};
+    bool rcvNoCompress[5] = {false, false, false, false, false};
+    bool rcvAimGuide[5] = {false, false, false, false, false};
     // Returns true (and clears flag) if new options arrived since last call
-    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5]) {
+    bool GetAndClearPendingOptions(bool& cr, bool& cl, bool& st, int& vl, int pc[5], bool nc[5], bool ag[5]) {
         if (!pendingOptions) return false;
         pendingOptions = false;
         cr = rcvChainReaction; cl = rcvContinueLeave; st = rcvSingleTarget; vl = rcvVictoriesLimit;
-        for (int i = 0; i < 5; i++) pc[i] = rcvPlayerColors[i];
+        for (int i = 0; i < 5; i++) { pc[i] = rcvPlayerColors[i]; nc[i] = rcvNoCompress[i]; ag[i] = rcvAimGuide[i]; }
         return true;
     }
 

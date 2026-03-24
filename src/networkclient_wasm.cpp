@@ -254,7 +254,7 @@ bool NetworkClient::WaitForTobeBubble(int& bubbleId) {
     return false;
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5]) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5]) {
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "O %d %d %d %d %d %d %d %d %d",
              chainReaction ? 1 : 0, continueWhenLeave ? 1 : 0, singleTarget ? 1 : 0, victoriesLimit,

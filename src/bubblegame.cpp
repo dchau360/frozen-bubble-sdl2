@@ -513,14 +513,14 @@ void BubbleGame::RandomLevel(BubbleArray &bArray){
     }
 }
 
-void BubbleGame::SyncNetworkLevel() {
+bool BubbleGame::SyncNetworkLevel() {
     // Synchronize level generation for network multiplayer
     SDL_Log("SyncNetworkLevel: Starting level synchronization");
 
     NetworkClient* netClient = NetworkClient::Instance();
     if (!netClient || !netClient->IsConnected()) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SyncNetworkLevel: Not connected!");
-        return;
+        return false;
     }
 
     const int bubbleSize = 32;  // Full-size bubble pixel width
@@ -553,7 +553,7 @@ void BubbleGame::SyncNetworkLevel() {
                 int recv_cx, recv_cy, recv_id;
                 if (!netClient->WaitForBubble(recv_cx, recv_cy, recv_id)) {
                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to receive bubble at cx=%d cy=%d", cx, cy);
-                    return;
+                    return false;
                 }
                 if (recv_cx != cx || recv_cy != cy) {
                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Bubble position mismatch! Expected (%d,%d) got (%d,%d)",
@@ -629,11 +629,11 @@ void BubbleGame::SyncNetworkLevel() {
         // Joiner receives
         if (!netClient->WaitForNextBubble(nextBubbleId)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to receive next bubble");
-            return;
+            return false;
         }
         if (!netClient->WaitForTobeBubble(tobeBubbleId)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to receive tobe bubble");
-            return;
+            return false;
         }
     }
 
@@ -658,6 +658,7 @@ void BubbleGame::SyncNetworkLevel() {
     } else if (currentSettings.playerCount >= 3) {
         UpdatePlayerNameWinText();
     }
+    return true;
 }
 
 void SetupGameMetrics(BubbleArray *bArray, int playerCount, bool lowGfx, bool localMultiplayer = false){
@@ -722,6 +723,7 @@ void BubbleGame::NewGame(SetupSettings setup) {
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
+    for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
     pendingHighscore = false;
     curLevel = setup.startLevel;
     connectedPlayerCount = setup.playerCount;  // Reset connected count for new game
@@ -738,6 +740,8 @@ void BubbleGame::NewGame(SetupSettings setup) {
         int nc = (setup.playerCount >= 2) ? setup.playerColors[i] : 7;
         nc = (nc < 5) ? 5 : (nc > 8) ? 8 : nc;
         bubbleArrays[i].numColors = nc;
+        bubbleArrays[i].compressionDisabled = setup.disableCompression[i];
+        bubbleArrays[i].aimGuideEnabled = setup.aimGuide[i];
     }
 
     // Initialize controllers for local multiplayer
@@ -1177,7 +1181,11 @@ void BubbleGame::NewGame(SetupSettings setup) {
         // For multiplayer, generate one layout and use same bubble IDs for all players
         if (currentSettings.networkGame) {
             // Network game (2-5 players) - synchronize level between all players
-            SyncNetworkLevel();
+            if (!SyncNetworkLevel()) {
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "NewGame: Level sync failed - returning to lobby");
+                QuitToTitle();
+                return;
+            }
         } else if (currentSettings.playerCount == 2) {
             // Local 2P game - generate layout for player 1
             RandomLevel(bubbleArrays[0]);
@@ -1245,6 +1253,7 @@ void BubbleGame::ReloadGame(int level) {
     gameMpDone = false;
     sendMalusToOne = -1;
     attackingMe.clear();
+    for (int i = 0; i < 5; i++) playerTargeting[i] = -1;
 
     // Reset all players to ALIVE state for new round (especially important for 3-5 player games)
     // But keep LEFT players as LEFT — they disconnected and can't come back (original: left = 1 persists)
@@ -1384,7 +1393,11 @@ void BubbleGame::ReloadGame(int level) {
         if (currentSettings.networkGame) {
             // Network game (2-5 players) - synchronize level between all players
             // SyncNetworkLevel also syncs initial bubbles, so DON'T call ChooseFirstBubble after
-            SyncNetworkLevel();
+            if (!SyncNetworkLevel()) {
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ReloadGame: Level sync failed - returning to lobby");
+                QuitToTitle();
+                return;
+            }
         } else if (currentSettings.playerCount == 2) {
             // Local 2P game - generate layout for player 1
             RandomLevel(bubbleArrays[0]);
@@ -2731,6 +2744,7 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
 // opponentIdx: 1-4 = target that opponent's bubbleArrays slot, -1 = clear (split to all)
 void BubbleGame::SetSendMalusToOne(int opponentIdx) {
     sendMalusToOne = opponentIdx;
+    playerTargeting[0] = opponentIdx;
 
     NetworkClient* netClient = NetworkClient::Instance();
     if (!netClient || !netClient->IsConnected()) return;
@@ -3137,6 +3151,7 @@ void BubbleGame::HandlePlayerLoss(BubbleArray &bArray) {
 }
 
 void BubbleGame::CheckGameState(BubbleArray &bArray) {
+    if (bArray.compressionDisabled) return;  // Per-player compression disabled
     bArray.turnsToCompress--;
     if (bArray.turnsToCompress == 1) bArray.waitPrelight = PRELIGHT_FAST;
     if (bArray.turnsToCompress == 0) {
@@ -3222,6 +3237,60 @@ void BubbleGame::CheckGameState(BubbleArray &bArray) {
             HandlePlayerLoss(bArray);
         }
     }
+}
+
+static void DrawAimGuide(SDL_Renderer* rend, const BubbleArray& bArray) {
+    const int BUBBLE_SIZE = 32;
+    const int ROW_SIZE = 28;
+    const float speed = (float)(BUBBLE_SPEED);  // 5 pixels/step
+
+    float px = (float)bArray.curLaunchRct.x;
+    float py = (float)bArray.curLaunchRct.y;
+    float angle = bArray.shooterSprite.angle;
+    float dx = speed * cosf(angle);
+    float dy = speed * sinf(angle);
+
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+
+    for (int step = 0; step < 400; step++) {
+        px += dx;
+        py -= dy;  // Negative = move up
+
+        if (px < bArray.leftLimit) {
+            px = 2.0f * bArray.leftLimit - px;
+            dx = -dx;
+        }
+        if (px > bArray.rightLimit - BUBBLE_SIZE) {
+            px = 2.0f * (bArray.rightLimit - BUBBLE_SIZE) - px;
+            dx = -dx;
+        }
+
+        if (py <= (float)bArray.topLimit) break;
+
+        // Check grid collision every 2 steps
+        if (step % 2 == 0) {
+            int cy = (int)((py - bArray.bubbleOffset.y + ROW_SIZE / 2.0f) / ROW_SIZE);
+            if (cy >= 0 && cy < 13) {
+                int oddRowOffset = ((int)bArray.bubbleMap[cy].size() == 7) ? BUBBLE_SIZE / 2 : 0;
+                int cx = (int)((px - bArray.bubbleOffset.x + BUBBLE_SIZE / 2.0f - oddRowOffset) / BUBBLE_SIZE);
+                if (cx >= 0 && cx < (int)bArray.bubbleMap[cy].size() &&
+                    bArray.bubbleMap[cy][cx].bubbleId != -1) {
+                    break;
+                }
+            }
+        }
+
+        // Draw dot every 8 steps, fading with distance
+        if (step % 8 == 0) {
+            int alpha = 200 - step / 2;
+            if (alpha < 30) alpha = 30;
+            SDL_SetRenderDrawColor(rend, 255, 255, 255, (Uint8)alpha);
+            SDL_Rect dot = {(int)px + BUBBLE_SIZE / 2 - 3, (int)py + BUBBLE_SIZE / 2 - 3, 6, 6};
+            SDL_RenderFillRect(rend, &dot);
+        }
+    }
+
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
 }
 
 void BubbleGame::Render() {
@@ -3397,6 +3466,7 @@ void BubbleGame::Render() {
         UpdatePenguin(curArray);
         if(!lowGfx) curArray.penguinSprite.Render();
         curArray.shooterSprite.Render(lowGfx);
+        if (curArray.aimGuideEnabled && !gameFinish) DrawAimGuide(rend, curArray);
         SDL_RenderCopy(rend, inGameText.Texture(), nullptr, inGameText.Coords());
 
         // Display score (UpdateScoreText now renders immediately)
@@ -3481,6 +3551,10 @@ void BubbleGame::Render() {
             UpdatePenguin(curArray);
             if(!lowGfx) curArray.penguinSprite.Render();
             curArray.shooterSprite.Render(lowGfx);
+            if (curArray.aimGuideEnabled && !gameFinish &&
+                curArray.playerState == BubbleArray::PlayerState::ALIVE) {
+                DrawAimGuide(rend, curArray);
+            }
 
             // NOTE: UpdateSingleBubbles is now called ONCE before the loop (line 2416)
             // Don't call it here per-player anymore
@@ -3540,6 +3614,28 @@ void BubbleGame::Render() {
                     attackRct.x = attackPos[rpIdx].x;
                     attackRct.y = attackPos[rpIdx].y;
                     SDL_RenderCopy(rend, imgAttack[rpIdx], nullptr, &attackRct);
+                }
+            }
+
+            // Show targeting text: who this player is targeting
+            if (currentSettings.singlePlayerTargetting && !gameFinish &&
+                playerTargeting[i] >= 0 && playerTargeting[i] < currentSettings.playerCount) {
+                const std::string& targetNick = bubbleArrays[playerTargeting[i]].playerNickname;
+                if (!targetNick.empty()) {
+                    char tgtBuf[64];
+                    snprintf(tgtBuf, sizeof(tgtBuf), "> %s", targetNick.c_str());
+                    targetingText.UpdateText(rend, tgtBuf, 0);
+                    // Position: near each player's shooter area
+                    int tx, ty;
+                    if (curArray.playerAssigned == 0) {
+                        tx = curArray.shooterSprite.rect.x + curArray.shooterSprite.rect.w / 2 - 30;
+                        ty = curArray.shooterSprite.rect.y - 20;
+                    } else {
+                        tx = curArray.shooterSprite.rect.x;
+                        ty = curArray.shooterSprite.rect.y + curArray.shooterSprite.rect.h;
+                    }
+                    targetingText.UpdatePosition({tx, ty});
+                    SDL_RenderCopy(rend, targetingText.Texture(), nullptr, targetingText.Coords());
                 }
             }
         }
@@ -4438,6 +4534,17 @@ void BubbleGame::ProcessNetworkMessages() {
                             if (std::find(attackingMe.begin(), attackingMe.end(), senderIdx) == attackingMe.end()) {
                                 attackingMe.push_back(senderIdx);
                             }
+                        }
+                        // Track all players' targets (not just who's targeting me)
+                        if (strlen(targetNick) == 0) {
+                            playerTargeting[senderIdx] = -1;  // cleared
+                        } else {
+                            // Find which array has targetNick
+                            int targetIdx = -1;
+                            for (int i = 0; i < currentSettings.playerCount; i++) {
+                                if (bubbleArrays[i].playerNickname == targetNick) { targetIdx = i; break; }
+                            }
+                            playerTargeting[senderIdx] = targetIdx;
                         }
                         SDL_Log("'A' message: sender=%d targetNick='%s' myNick='%s' attackingMe.size=%zu",
                                 senderIdx, targetNick, myNick.c_str(), attackingMe.size());

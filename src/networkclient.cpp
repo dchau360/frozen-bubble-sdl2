@@ -407,18 +407,22 @@ bool NetworkClient::SendTalk(const char* message) {
     return SendCommand(cmd);
 }
 
-bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5]) {
+bool NetworkClient::SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5]) {
     // Send game options using SETOPTIONS command (original line 4468-4474)
     // Format: SETOPTIONS CHAINREACTION:0/1,...,NUMCOLORS_P1:N,...,NUMCOLORS_P5:N
-    char cmd[512];
+    char cmd[640];
     snprintf(cmd, sizeof(cmd),
              "SETOPTIONS CHAINREACTION:%d,CONTINUEGAMEWHENPLAYERSLEAVE:%d,SINGLEPLAYERTARGETTING:%d,VICTORIESLIMIT:%d"
-             ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d",
+             ",NUMCOLORS_P1:%d,NUMCOLORS_P2:%d,NUMCOLORS_P3:%d,NUMCOLORS_P4:%d,NUMCOLORS_P5:%d"
+             ",NOCOMPRESS_P1:%d,NOCOMPRESS_P2:%d,NOCOMPRESS_P3:%d,NOCOMPRESS_P4:%d,NOCOMPRESS_P5:%d"
+             ",AIMGUIDE_P1:%d,AIMGUIDE_P2:%d,AIMGUIDE_P3:%d,AIMGUIDE_P4:%d,AIMGUIDE_P5:%d",
              chainReaction ? 1 : 0,
              continueWhenLeave ? 1 : 0,
              singleTarget ? 1 : 0,
              victoriesLimit,
-             playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4]);
+             playerColors[0], playerColors[1], playerColors[2], playerColors[3], playerColors[4],
+             noCompress[0] ? 1 : 0, noCompress[1] ? 1 : 0, noCompress[2] ? 1 : 0, noCompress[3] ? 1 : 0, noCompress[4] ? 1 : 0,
+             aimGuide[0] ? 1 : 0, aimGuide[1] ? 1 : 0, aimGuide[2] ? 1 : 0, aimGuide[3] ? 1 : 0, aimGuide[4] ? 1 : 0);
     SDL_Log("Sending game options: %s", cmd);
     return SendCommand(cmd);
 }
@@ -928,6 +932,16 @@ void NetworkClient::HandlePushMessage(const std::string& pushMsg) {
         rcvPlayerColors[2] = parseVal("NUMCOLORS_P3", 7);
         rcvPlayerColors[3] = parseVal("NUMCOLORS_P4", 7);
         rcvPlayerColors[4] = parseVal("NUMCOLORS_P5", 7);
+        rcvNoCompress[0] = parseVal("NOCOMPRESS_P1", 0) != 0;
+        rcvNoCompress[1] = parseVal("NOCOMPRESS_P2", 0) != 0;
+        rcvNoCompress[2] = parseVal("NOCOMPRESS_P3", 0) != 0;
+        rcvNoCompress[3] = parseVal("NOCOMPRESS_P4", 0) != 0;
+        rcvNoCompress[4] = parseVal("NOCOMPRESS_P5", 0) != 0;
+        rcvAimGuide[0] = parseVal("AIMGUIDE_P1", 0) != 0;
+        rcvAimGuide[1] = parseVal("AIMGUIDE_P2", 0) != 0;
+        rcvAimGuide[2] = parseVal("AIMGUIDE_P3", 0) != 0;
+        rcvAimGuide[3] = parseVal("AIMGUIDE_P4", 0) != 0;
+        rcvAimGuide[4] = parseVal("AIMGUIDE_P5", 0) != 0;
         pendingOptions = true;
     } else if (pushMsg.find("GAME_CAN_START:") == 0) {
         // Game is ready to start - server sent player mappings

@@ -241,6 +241,8 @@ struct SetupSettings {
     bool mpTraining = false;  // 1P multiplayer training mode (timed, score-based)
     bool localMultiplayer = false;  // True for local controller-based multiplayer
     int playerColors[5] = {7, 7, 7, 7, 7};  // Per-player color count (5-8)
+    bool disableCompression[5] = {false, false, false, false, false};  // Per-player: skip row compression
+    bool aimGuide[5] = {false, false, false, false, false};  // Per-player: show aim trajectory guide
 };
 
 struct BubbleArray {
@@ -260,6 +262,8 @@ struct BubbleArray {
     std::string playerNickname = "";  // Player nickname for display
     int winCount = 0;  // Number of rounds won by this player
     int numColors = 7;  // Number of bubble colors for this player (5-8)
+    bool compressionDisabled = false;  // If true, rows never drop down for this player
+    bool aimGuideEnabled = false;      // If true, draw aim trajectory guide for this player
 
     // Network game action flags (original: $actions{$player}{mp_fire} and {mp_stick})
     bool mpFirePending = false;  // Set to true when we receive 'f' message, cleared after firing
@@ -416,6 +420,7 @@ private:
     // Single player targeting state (original: $pdata{sendmalustoone})
     int sendMalusToOne = -1;           // -1 = split to all, 1-4 = opponent bubbleArrays index
     std::vector<int> attackingMe;       // opponent array indices currently targeting local player (p1)
+    int playerTargeting[5] = {-1, -1, -1, -1, -1};  // Who each player is targeting (-1 = all/none)
     bool pendingHighscore = false;      // A new highscore was earned, show screen after level completion
     std::array<std::vector<int>, 10> savedLevelGrid;  // Level grid saved at load time for highscore display
 
@@ -424,6 +429,7 @@ private:
 
     TTFText inGameText, winsP1Text, winsP2Text, scoreText, comboText, finalScoreText, mpTrainText;
     TTFText playerNameWinText[5];  // "PlayerName: WinCount" for each player (3-5 player mode)
+    TTFText targetingText;   // Reused to render targeting indicators in MP mode
 
     // In-game chat (network games only)
     struct InGameChatMsg { std::string nick; std::string text; int framesLeft; };
@@ -462,7 +468,7 @@ private:
     void DoPrelightAnimation(BubbleArray &bArray, int &waitTime);
 
     void RandomLevel(BubbleArray &bArray);
-    void SyncNetworkLevel();  // Synchronize level for network multiplayer
+    bool SyncNetworkLevel();  // Synchronize level for network multiplayer; returns false on sync failure
     void ReloadGame(int level);
     void SubmitScore(BubbleArray &bArray);
 
