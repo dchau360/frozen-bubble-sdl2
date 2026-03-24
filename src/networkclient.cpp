@@ -1293,7 +1293,7 @@ bool NetworkClient::IsReachable(const char* host, int port, int timeoutMs) {
 
 // Public server list hosted in this repo — same name and format as original frozen-bubble.org
 #define GITHUB_SERVER_LIST_URL \
-    "https://raw.githubusercontent.com/dchau360/frozen-bubble-sdl2-vibecode/main/serverlist-" PROTO_MAJOR_STR
+    "https://raw.githubusercontent.com/dchau360/frozen-bubble-sdl2/main/serverlist-" PROTO_MAJOR_STR
 
 // Original Frozen Bubble master server list URL (format: "host port" per line)
 #define FB_MASTER_SERVER_URL \
