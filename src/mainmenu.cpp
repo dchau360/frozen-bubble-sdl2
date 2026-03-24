@@ -26,6 +26,7 @@
 
 #include <SDL2/SDL_image.h>
 #include <cstring>
+#include <cmath>
 #include <errno.h>
 #ifndef _WIN32
 #include <unistd.h>
@@ -156,19 +157,18 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
 
     // Load network lobby graphics
     netGameBackground = IMG_LoadTexture(rend, ASSET("/gfx/back_netgame.png").c_str());
-    netSpotFree = IMG_LoadTexture(rend, ASSET("/gfx/netspot-free.png").c_str());
+    netSpotFree = IMG_LoadTexture(rend, ASSET("/gfx/netspot.png").c_str());
     netSpotInGame = IMG_LoadTexture(rend, ASSET("/gfx/netspot-insamegame.png").c_str());
     netSpotPlaying = IMG_LoadTexture(rend, ASSET("/gfx/netspot-playing.png").c_str());
     highlightServer = IMG_LoadTexture(rend, ASSET("/gfx/menu/highlight-server.png").c_str());
 
-    // Load animated self spot (13 frames: 1-7, A-F which is 10-15 in hex)
-    const char* selfSpotFrames[] = {"1", "2", "3", "4", "5", "6", "7", "A", "B", "C", "D"};
-    for (int i = 0; i < 11; i++) {
+    // Load animated self spot (13 frames: 1-9, A-D)
+    const char* selfSpotFrames[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D"};
+    for (int i = 0; i < 13; i++) {
         char rel[64];
         snprintf(rel, sizeof(rel), "/gfx/netspot-self-%s.png", selfSpotFrames[i]);
         netSpotSelf[i] = IMG_LoadTexture(rend, ASSET(rel).c_str());
     }
-    netSpotSelf[11] = netSpotSelf[12] = nullptr; // Not all frames exist
 }
 
 MainMenu::~MainMenu() {
@@ -1076,7 +1076,13 @@ void MainMenu::HandleInput(SDL_Event *e){
                             }
                             if (netClient->SendNick(nickname)) {
                                 SDL_Delay(100);
-                                if (netClient->SendGeoLoc("zz")) {
+                                std::string geoLoc = NetworkClient::DetectGeoLocation();
+                                // Parse for own spot rendering
+                                float gLat = 0.0f, gLon = 0.0f;
+                                if (sscanf(geoLoc.c_str(), "%f:%f", &gLat, &gLon) == 2) {
+                                    myGeoLat = gLat; myGeoLon = gLon; myGeoLocSet = true;
+                                }
+                                if (netClient->SendGeoLoc(geoLoc.c_str())) {
                                     networkInLobby = true;
                                     networkInputMode = 0;  // Switch to lobby mode so C/J/T/U keys work
                                     networkGameStarting = false;
@@ -1746,7 +1752,67 @@ void MainMenu::NetPanelRender() {
         // Render world map background
         SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), netGameBackground, nullptr, nullptr);
 
-        // Note: geolocation spots (netspot*.png) are not rendered - requires STATUSGEO server support
+        // Render geolocation spots on world map (original: print_spot / save_back_spot)
+        // Coordinate formula matches original Perl get_spot_location() at line 4084
+        auto geoToScreen = [](float lat, float lon) -> SDL_Point {
+            const float x0 = 309.0f, y0 = 231.0f;
+            const float lonFactor = 1.424f, latFactor = -145.0f;
+            float x = x0 + lon * lonFactor;
+            float y = y0 + (float)(std::asinh(std::tan((double)lat * 1.4 * 3.14159265358979323846 / 360.0)) * latFactor);
+            return {(int)x, (int)y};
+        };
+        auto renderSpot = [&](SDL_Texture* tex, int x, int y, const char* nick) {
+            if (!tex) return;
+            int w = 0, h = 0;
+            SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
+            SDL_Rect r = {x - w / 2, y - h / 2, w, h};
+            SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), tex, nullptr, &r);
+            if (nick && nick[0]) {
+                networkText.UpdateText(const_cast<SDL_Renderer*>(renderer), nick, 0);
+                networkText.UpdatePosition({x - networkText.Coords()->w / 2, y + h / 2 + 1});
+                SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), networkText.Texture(), nullptr, networkText.Coords());
+            }
+        };
+
+        // Draw spots for players in games (rendered first, underneath free players)
+        {
+            std::vector<GameRoom> games = netClient->GetGameList();
+            for (const auto& game : games) {
+                for (const auto& p : game.players) {
+                    if (p.nick == netClient->GetPlayerNick()) continue;
+                    float lat = 0.0f, lon = 0.0f;
+                    if (sscanf(p.geoloc.c_str(), "%f:%f", &lat, &lon) != 2) continue;
+                    SDL_Point sp = geoToScreen(lat, lon);
+                    GameRoom* myGame = netClient->GetCurrentGame();
+                    bool inMyGame = myGame && (game.creator == myGame->creator);
+                    renderSpot(inMyGame ? netSpotInGame : netSpotPlaying, sp.x, sp.y, p.nick.c_str());
+                }
+            }
+        }
+
+        // Draw spots for free (open) players
+        {
+            std::vector<NetworkPlayer> openPlayers = netClient->GetOpenPlayers();
+            for (const auto& p : openPlayers) {
+                if (p.nick == netClient->GetPlayerNick()) continue;
+                float lat = 0.0f, lon = 0.0f;
+                if (sscanf(p.geoloc.c_str(), "%f:%f", &lat, &lon) != 2) continue;
+                SDL_Point sp = geoToScreen(lat, lon);
+                renderSpot(netSpotFree, sp.x, sp.y, p.nick.c_str());
+            }
+        }
+
+        // Draw own animated self spot (top layer)
+        if (myGeoLocSet) {
+            SDL_Point myPos = geoToScreen(myGeoLat, myGeoLon);
+            SDL_Texture* selfTex = netSpotSelf[netSpotSelfFrame];
+            renderSpot(selfTex, myPos.x, myPos.y, nullptr);  // No label for self
+            if (++netSpotSelfFrameTimer >= 4) {  // ~4 frames at 60fps ≈ 60ms
+                netSpotSelfFrameTimer = 0;
+                if (++netSpotSelfFrame >= 13) netSpotSelfFrame = 0;
+            }
+        }
+
         // Render action list at top left (like original)
         const int actionStartY = 30;
         const int actionStartX = 78;

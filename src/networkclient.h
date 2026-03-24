@@ -152,6 +152,7 @@ public:
     static void Dispose();
     static std::vector<ServerInfo> DiscoverLANServers();
     static std::vector<ServerInfo> FetchPublicServers();
+    static std::string DetectGeoLocation();  // Detect player's lat/lon via IP; returns "lat:lon" or "zz"
     // Returns TCP connect latency in ms, or -1 if unreachable within timeoutMs
     static int MeasureLatency(const char* host, int port, int timeoutMs = 2000);
     static bool IsReachable(const char* host, int port, int timeoutMs = 2000);

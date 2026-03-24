@@ -170,6 +170,11 @@ private:
     bool playerNoCompress[5] = {false, false, false, false, false};  // Per-player: disable row compression
     bool playerAimGuide[5] = {false, false, false, false, false};  // Per-player: show aim guide
 
+    // Geolocation state
+    float myGeoLat = 0.0f, myGeoLon = 0.0f;
+    bool myGeoLocSet = false;
+    int netSpotSelfFrame = 0, netSpotSelfFrameTimer = 0;
+
     // World map lobby graphics
     SDL_Texture *netGameBackground = nullptr;
     SDL_Texture *netSpotFree = nullptr;

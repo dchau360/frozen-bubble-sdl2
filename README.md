@@ -20,6 +20,8 @@ Two players on the same keyboard:
 ### Network Multiplayer (2–5 players)
 Play over LAN or internet using the included server. Supports chain reactions, malus (attack bubbles), win tracking, and 2–5 player layouts.
 
+The lobby displays a world map with colored dots showing where each connected player is located. Your location is detected automatically at connect time and shown as an animated pulsing dot.
+
 The host can configure the following settings in the game room — all joined players see updates in real time:
 
 | Setting | Description |

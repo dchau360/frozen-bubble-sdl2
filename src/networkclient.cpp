@@ -1473,6 +1473,51 @@ static void curlFetch(const char* url, std::vector<ServerInfo>& out, bool origin
     pclose(fp);
 }
 
+std::string NetworkClient::DetectGeoLocation() {
+    // Cache result for the session
+    static std::string cached = "";
+    static bool tried = false;
+    if (tried) return cached;
+    tried = true;
+
+#ifdef __WASM_PORT__
+    return "zz";
+#endif
+
+    const char* url = "https://ip-api.com/line/?fields=lat,lon";
+    std::string body;
+
+#ifdef __ANDROID__
+    body = androidFetchUrl(url);
+#else
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 8 '%s' 2>/dev/null", url);
+    FILE* fp = popen(cmd, "r");
+    if (fp) {
+        char buf[64];
+        while (fgets(buf, sizeof(buf), fp)) body += buf;
+        pclose(fp);
+    }
+#endif
+
+    // Response is two lines: latitude\nlongitude
+    float lat = 0.0f, lon = 0.0f;
+    if (sscanf(body.c_str(), "%f %f", &lat, &lon) == 2 ||
+        sscanf(body.c_str(), "%f\n%f", &lat, &lon) == 2) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%.1f:%.1f", lat, lon);
+        // Ensure within 13 char server limit
+        buf[13] = '\0';
+        cached = buf;
+        SDL_Log("Detected geolocation: %s", cached.c_str());
+        return cached;
+    }
+
+    SDL_Log("Geolocation detection failed, using 'zz'");
+    cached = "zz";
+    return cached;
+}
+
 std::vector<ServerInfo> NetworkClient::FetchPublicServers() {
     std::vector<ServerInfo> servers;
 
