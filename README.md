@@ -108,14 +108,14 @@ Any player pressing Enter after a round ends automatically starts the next round
 
 ## Public Server List
 
-Community servers are listed in [`serverlist-1`](serverlist-1) — same format as the original `frozen-bubble.org` server list:
+Community servers are listed in the [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) repo — same format as the original `frozen-bubble.org` server list:
 
 ```
 # host port
 myserver.example.com 1511
 ```
 
-Submit a PR to add your server. The game fetches this list automatically on startup.
+Submit a PR to [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble-servers) to add your server. The game fetches this list automatically on startup.
 
 ---
 
