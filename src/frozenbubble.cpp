@@ -200,6 +200,14 @@ uint8_t FrozenBubble::RunForEver()
         // handle input
         SDL_Event e;
         while (SDL_PollEvent (&e)) {
+            // Log any event that could cause quit, for debugging
+            if (e.type == SDL_QUIT || e.type == SDL_APP_TERMINATING ||
+                (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE) ||
+                (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Quit-triggering event: type=0x%x winev=%d key=%d",
+                    e.type, e.window.event, e.key.keysym.sym);
+            }
             HandleInput(&e);
         }
 
