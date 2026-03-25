@@ -31,9 +31,8 @@ extern std::string g_dataDir;
 // Usage: ASSET("/gfx/foo.png").c_str()  or  ASSET("/gfx/foo.png")
 inline std::string ASSET(const char* relpath) {
 #ifdef __ANDROID__
-    // Skip leading slash for Android asset manager
-    if (relpath && relpath[0] == '/') relpath++;
-    return std::string(relpath);
+    // Assets are extracted to g_dataDir by AssetExtractor; use full path.
+    return g_dataDir + relpath;
 #elif defined(__WASM_PORT__)
     // WebAssembly uses Emscripten virtual filesystem
     // Assets preloaded at /share, g_dataDir is "/share"
