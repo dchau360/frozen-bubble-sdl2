@@ -138,6 +138,14 @@ Controller mapping:
 | B | Back |
 | Start | Pause |
 
+### Entering text (IP address, nickname, etc.)
+
+When a text input field is active, the on-screen keyboard appears. If the **Delete/Clear** key doesn't work immediately:
+
+1. Press any letter key first (e.g. **A**)
+2. The field is now active — press **Delete** to erase the letter, then continue deleting the existing text
+3. Type the new value and press **Enter** to confirm
+
 ---
 
 ## macOS: "damaged and can't be opened"
@@ -168,6 +176,17 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 - [ ] Finish local multiplayer (controller support, 2–5 players)
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
+
+---
+
+## New in v2.3.1
+
+- **Exit button** — replaced High Scores menu button with an Exit App button
+- **Net game manual entry** — added visible Connect button; navigate with UP/DOWN, ENTER to select
+- **Net game lobby text color** — fixed text appearing all red after a failed connection attempt
+- **False local server in Net Game list** — fixed spurious "Local Server" entry appearing when no server is running
+- **Net game keyboard** — keyboard no longer auto-opens when entering the manual IP/port entry screen; press ENTER on a field to open it
+- **Android TV delete key** — improved backspace handling for text fields on Android 11+
 
 ---
 

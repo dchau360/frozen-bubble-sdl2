@@ -1917,12 +1917,13 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
             CheckPossibleDestroy(*bArray);
             // Chain reaction bubble landed — check if more chains are still in flight
             // before releasing malus (original line 2218: no chain reactions in flight)
-            if (currentSettings.networkGame && bArray->playerAssigned == 0) {
+            {
+                int arr = bArray->playerAssigned;
                 bool chainInFlight = false;
                 for (const auto& sb : singleBubbles)
-                    if (!sb.shouldClear && sb.assignedArray == 0 && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                if (!chainInFlight)
-                    ProcessMalusQueue(bubbleArrays[0], frameCount);
+                    if (!sb.shouldClear && sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : currentSettings.playerCount >= 2))
+                    ProcessMalusQueue(bubbleArrays[arr], frameCount);
             }
             CheckGameState(*bArray);
             continue;
@@ -1980,12 +1981,15 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                 CheckPossibleDestroy(*bArray);
                 // Original line 2218-2250: malus generation happens at stick time, only if no chain
                 // reactions are still in flight. We release queued malus here so it falls AFTER the shot sticks.
-                if (currentSettings.networkGame && sBubble.assignedArray == 0) {
+                // Use bArray->playerAssigned (not sBubble.assignedArray) since CheckPossibleDestroy may
+                // push_back to singleBubbles causing reallocation, making sBubble a dangling reference.
+                {
+                    int arr = bArray->playerAssigned;
                     bool chainInFlight = false;
                     for (const auto& sb : singleBubbles)
-                        if (sb.assignedArray == 0 && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                    if (!chainInFlight)
-                        ProcessMalusQueue(bubbleArrays[0], frameCount);
+                        if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                    if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : currentSettings.playerCount >= 2))
+                        ProcessMalusQueue(bubbleArrays[arr], frameCount);
                 }
                 CheckGameState(*bArray);
                 goto STOP_ITER;
@@ -2023,12 +2027,14 @@ void BubbleGame::UpdateSingleBubbles(int /*id*/) {
                         sBubble.shouldClear = true;
                         CheckPossibleDestroy(*bArray);
                         // Release queued malus at stick time (original line 2218-2250)
-                        if (currentSettings.networkGame && sBubble.assignedArray == 0) {
+                        // Use bArray->playerAssigned (not sBubble.assignedArray) — see note above.
+                        {
+                            int arr = bArray->playerAssigned;
                             bool chainInFlight = false;
                             for (const auto& sb : singleBubbles)
-                                if (sb.assignedArray == 0 && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
-                            if (!chainInFlight)
-                                ProcessMalusQueue(bubbleArrays[0], frameCount);
+                                if (sb.assignedArray == arr && sb.chainExists && !sb.chainReachedDest) { chainInFlight = true; break; }
+                            if (!chainInFlight && (currentSettings.networkGame ? arr == 0 : currentSettings.playerCount >= 2))
+                                ProcessMalusQueue(bubbleArrays[arr], frameCount);
                         }
                         CheckGameState(*bArray);
                         goto STOP_ITER;
@@ -3448,11 +3454,10 @@ void BubbleGame::Render() {
         // This ensures malus only falls AFTER the local player fires and their bubble sticks.
     }
 
-    // Local multiplayer: process malus queues for all players each frame
+    // NOTE: Local multiplayer malus queues are processed at stick time (inside the stick handlers above),
+    // matching original Perl behavior where malus only falls after the recipient sticks their bubble.
     if (!currentSettings.networkGame && currentSettings.playerCount >= 2 && !gameFinish) {
         frameCount++;
-        for (int i = 0; i < currentSettings.playerCount; i++)
-            ProcessMalusQueue(bubbleArrays[i], frameCount);
     }
 
     // Multiplayer training mode: periodically inject random malus, enforce 2-min timer

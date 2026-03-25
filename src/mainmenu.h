@@ -150,6 +150,8 @@ private:
     char networkHost[256] = "127.0.0.1";
     int networkPort = 1511;
     int networkInputMode = 0; // 0 = lobby main, 1 = port input, 2 = host/join choice, 3 = join game, 4 = chat input, 5 = username input, 6 = create confirm, 11 = pre-lobby nickname
+    bool networkFieldEditing = false; // True when keyboard is open for host/port field
+    int networkManualFieldIndex = 0;  // 0=host, 1=port, 2=connect (for manual-entry form navigation)
     std::string connectErrorMsg;
     char networkJoinCreator[32] = "";
     char networkChatInput[256] = "";

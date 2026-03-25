@@ -18,6 +18,7 @@
  */
 
 #include "menubutton.h"
+#include "frozenbubble.h"
 #include "gamesettings.h"
 #include "mainmenu.h"
 #include "platform.h"
@@ -155,7 +156,7 @@ void MenuButton::Pressed(void *parent)
     else if(buttonName == "langame") ((MainMenu *)parent)->ShowPanel(3); // LAN: UDP broadcast discovery
     else if(buttonName == "netgame") ((MainMenu *)parent)->ShowPanel(5); // Net: manual server entry
     else if(buttonName == "keys") ((MainMenu *)parent)->ShowPanel(4); // Keys configuration
-    else if(buttonName == "highscores") ((MainMenu *)parent)->ShowPanel(6);
+    else if(buttonName == "exit") FrozenBubble::Instance()->CallGameQuit();
 }
 
 void MenuButton::Activate()

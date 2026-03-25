@@ -56,7 +56,13 @@ static bool portInUse(int port) {
     connect(s, (struct sockaddr*)&addr, sizeof(addr));
     fd_set wfds; FD_ZERO(&wfds); FD_SET(s, &wfds);
     struct timeval tv{0, 200000}; // 200ms
-    bool inUse = (select(s + 1, nullptr, &wfds, nullptr, &tv) > 0);
+    bool inUse = false;
+    if (select(s + 1, nullptr, &wfds, nullptr, &tv) > 0) {
+        int err = 0;
+        socklen_t errLen = sizeof(err);
+        getsockopt(s, SOL_SOCKET, SO_ERROR, &err, &errLen);
+        inUse = (err == 0); // ECONNREFUSED also triggers select; only success has err==0
+    }
     SOCKET_CLOSE(s);
     return inUse;
 #endif
@@ -87,7 +93,7 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
         {"editor", "editor", 67}, 
         {"graphics", "graphics", 30}, 
         {"keys", "keys", 80}, 
-        {"highscores", "highscore", 89}
+        {"exit", "exit", 89}
     };
     uint32_t y_start = 14;
     for(size_t i = 0; i < std::size(texts); i++) {
@@ -258,8 +264,8 @@ void MainMenu::HandleInput(SDL_Event *e){
 
     switch(e->type) {
         case SDL_TEXTINPUT:
-            // Handle virtual keyboard character input for host field (mode 8)
-            if (showingNetPanel && !networkInLobby && networkInputMode == 8) {
+            // Handle virtual keyboard character input for host field (mode 8, only when actively editing)
+            if (showingNetPanel && !networkInLobby && networkInputMode == 8 && networkFieldEditing) {
                 size_t len = strlen(networkHost);
                 for (const char* p = e->text.text; *p; p++) {
                     char c = *p;
@@ -286,12 +292,38 @@ void MainMenu::HandleInput(SDL_Event *e){
                     }
                 }
             }
+            // Handle virtual keyboard character input for chat (mode 4)
+            if (showingNetPanel && networkInLobby && networkInputMode == 4) {
+                size_t len = strlen(networkChatInput);
+                for (const char* p = e->text.text; *p; p++) {
+                    char c = *p;
+                    if (c == '\b') {
+                        if (len > 0) { networkChatInput[--len] = '\0'; }
+                    } else if (len < 255) {
+                        networkChatInput[len++] = c;
+                        networkChatInput[len] = '\0';
+                    }
+                }
+            }
+            // Handle virtual keyboard character input for username (mode 5)
+            if (showingNetPanel && networkInLobby && networkInputMode == 5) {
+                size_t len = strlen(networkUsername);
+                for (const char* p = e->text.text; *p; p++) {
+                    char c = *p;
+                    if (c == '\b') {
+                        if (len > 0) { networkUsername[--len] = '\0'; }
+                    } else if (len < 31) {
+                        networkUsername[len++] = c;
+                        networkUsername[len] = '\0';
+                    }
+                }
+            }
             break;
         case SDL_KEYDOWN:
             // Handle backspace/delete in text fields before the repeat filter,
             // because Android's IME may send backspace with repeat=1 on a single press.
             if (e->key.keysym.sym == SDLK_BACKSPACE || e->key.keysym.sym == SDLK_DELETE) {
-                if (showingNetPanel && !networkInLobby && networkInputMode == 8) {
+                if (showingNetPanel && !networkInLobby && networkInputMode == 8 && networkFieldEditing) {
                     size_t len = strlen(networkHost);
                     if (len > 0) networkHost[len - 1] = '\0';
                     break;
@@ -325,65 +357,22 @@ void MainMenu::HandleInput(SDL_Event *e){
                     break;
                 }
             } else if (showingNetPanel && networkInLobby && networkInputMode == 4) {
-                // Chat input
-                if ((e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) ||
-                    (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) ||
-                    e->key.keysym.sym == SDLK_SPACE || e->key.keysym.sym == SDLK_EXCLAIM ||
-                    e->key.keysym.sym == SDLK_QUESTION || e->key.keysym.sym == SDLK_PERIOD ||
-                    e->key.keysym.sym == SDLK_COMMA) {
-                    size_t len = strlen(networkChatInput);
-                    if (len < 255) {
-                        if (e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) {
-                            networkChatInput[len] = 'a' + (e->key.keysym.sym - SDLK_a);
-                        } else if (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) {
-                            networkChatInput[len] = '0' + (e->key.keysym.sym - SDLK_0);
-                        } else if (e->key.keysym.sym == SDLK_SPACE) {
-                            networkChatInput[len] = ' ';
-                        } else {
-                            networkChatInput[len] = e->key.keysym.sym;
-                        }
-                        networkChatInput[len + 1] = '\0';
-                    }
-                    break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                // Chat input - characters handled by SDL_TEXTINPUT
+                if (e->key.keysym.sym == SDLK_BACKSPACE) {
                     size_t len = strlen(networkChatInput);
                     if (len > 0) networkChatInput[len - 1] = '\0';
                     break;
                 }
             } else if (showingNetPanel && networkInLobby && networkInputMode == 5) {
-                // Username input
-                if ((e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) ||
-                    (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9)) {
-                    size_t len = strlen(networkUsername);
-                    if (len < 31) {
-                        if (e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) {
-                            networkUsername[len] = 'a' + (e->key.keysym.sym - SDLK_a);
-                        } else {
-                            networkUsername[len] = '0' + (e->key.keysym.sym - SDLK_0);
-                        }
-                        networkUsername[len + 1] = '\0';
-                    }
-                    break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                // Username input - characters handled by SDL_TEXTINPUT
+                if (e->key.keysym.sym == SDLK_BACKSPACE) {
                     size_t len = strlen(networkUsername);
                     if (len > 0) networkUsername[len - 1] = '\0';
                     break;
                 }
             } else if (showingNetPanel && !networkInLobby && networkInputMode == 11) {
-                // Pre-lobby nickname input (on server selection screens)
-                if ((e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) ||
-                    (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9)) {
-                    size_t len = strlen(networkPreNick);
-                    if (len < 31) {
-                        if (e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) {
-                            networkPreNick[len] = 'a' + (e->key.keysym.sym - SDLK_a);
-                        } else {
-                            networkPreNick[len] = '0' + (e->key.keysym.sym - SDLK_0);
-                        }
-                        networkPreNick[len + 1] = '\0';
-                    }
-                    break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                // Pre-lobby nickname input - characters handled by SDL_TEXTINPUT
+                if (e->key.keysym.sym == SDLK_BACKSPACE) {
                     size_t len = strlen(networkPreNick);
                     if (len > 0) networkPreNick[len - 1] = '\0';
                     break;
@@ -417,43 +406,41 @@ void MainMenu::HandleInput(SDL_Event *e){
                 }
             }
 
-            if (showingNetPanel && !networkInLobby && networkInputMode == 8) {
-                // Manual IP/hostname entry (Net game)
-                connectErrorMsg.clear();
-                SDL_Keymod mod = SDL_GetModState();
-                bool shifted = (mod & KMOD_SHIFT) != 0;
-                size_t len = strlen(networkHost);
-                if (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) {
-                    if (len < 255) { networkHost[len] = '0' + (e->key.keysym.sym - SDLK_0); networkHost[len + 1] = '\0'; }
-                    break;
-                } else if (e->key.keysym.sym >= SDLK_a && e->key.keysym.sym <= SDLK_z) {
-                    if (len < 255) { networkHost[len] = shifted ? ('A' + (e->key.keysym.sym - SDLK_a)) : ('a' + (e->key.keysym.sym - SDLK_a)); networkHost[len + 1] = '\0'; }
-                    break;
-                } else if (e->key.keysym.sym == SDLK_PERIOD) {
-                    if (len < 255) { networkHost[len] = '.'; networkHost[len + 1] = '\0'; }
-                    break;
-                } else if (e->key.keysym.sym == SDLK_MINUS) {
-                    if (len < 255) { networkHost[len] = '-'; networkHost[len + 1] = '\0'; }
-                    break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE || e->key.keysym.sym == SDLK_DELETE) {
-                    if (len > 0) networkHost[len - 1] = '\0';
-                    break;
-                } else if (e->key.keysym.sym == SDLK_DOWN || e->key.keysym.sym == SDLK_UP) {
-                    networkInputMode = 9;  // Switch to port field
-                    break;
-                }
-            }
-            if (showingNetPanel && !networkInLobby && networkInputMode == 9) {
-                // Port field active
-                if (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) {
-                    if (networkPort < 6553) networkPort = networkPort * 10 + (e->key.keysym.sym - SDLK_0);
-                    break;
-                } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
-                    networkPort /= 10;
-                    break;
-                } else if (e->key.keysym.sym == SDLK_DOWN || e->key.keysym.sym == SDLK_UP) {
-                    networkInputMode = 8;  // Switch back to host field
-                    break;
+            if (showingNetPanel && !networkInLobby && (networkInputMode == 8 || networkInputMode == 9)) {
+                // Manual entry form: host (index 0), port (index 1), connect (index 2)
+                if (networkFieldEditing) {
+                    // Keyboard is open — handle field-specific input
+                    if (networkManualFieldIndex == 0) {
+                        // Host field editing
+                        connectErrorMsg.clear();
+                        size_t len = strlen(networkHost);
+                        if (e->key.keysym.sym == SDLK_BACKSPACE || e->key.keysym.sym == SDLK_DELETE) {
+                            if (len > 0) networkHost[len - 1] = '\0';
+                            break;
+                        }
+                    } else if (networkManualFieldIndex == 1) {
+                        // Port field editing
+                        if (e->key.keysym.sym >= SDLK_0 && e->key.keysym.sym <= SDLK_9) {
+                            if (networkPort < 6553) networkPort = networkPort * 10 + (e->key.keysym.sym - SDLK_0);
+                            break;
+                        } else if (e->key.keysym.sym == SDLK_BACKSPACE) {
+                            networkPort /= 10;
+                            break;
+                        }
+                    }
+                } else {
+                    // Not editing: UP/DOWN cycles through host, port, connect
+                    if (e->key.keysym.sym == SDLK_DOWN) {
+                        networkManualFieldIndex = (networkManualFieldIndex + 1) % 3;
+                        networkInputMode = (networkManualFieldIndex == 1) ? 9 : 8;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        break;
+                    } else if (e->key.keysym.sym == SDLK_UP) {
+                        networkManualFieldIndex = (networkManualFieldIndex + 2) % 3;
+                        networkInputMode = (networkManualFieldIndex == 1) ? 9 : 8;
+                        AudioMixer::Instance()->PlaySFX("menu_change");
+                        break;
+                    }
                 }
             }
 
@@ -1072,7 +1059,28 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                         break;
                     } else if (showingNetPanel && !networkInLobby &&
-                               (networkInputMode == 7 || networkInputMode == 8 || networkInputMode == 9 || networkInputMode == 10)) {
+                               (networkInputMode == 8 || networkInputMode == 9)) {
+                        if (networkFieldEditing) {
+                            // ENTER while keyboard open → close keyboard
+                            networkFieldEditing = false;
+                            SDL_StopTextInput();
+                            AudioMixer::Instance()->PlaySFX("menu_selected");
+                            break;
+                        } else if (networkManualFieldIndex == 2) {
+                            // ENTER on Connect button → connect
+                            goto DO_CONNECT;
+                        } else {
+                            // ENTER on host/port field → open keyboard
+                            networkFieldEditing = true;
+                            SDL_StopTextInput();
+                            SDL_StartTextInput();
+                            { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
+                            AudioMixer::Instance()->PlaySFX("menu_selected");
+                            break;
+                        }
+                    } else if (showingNetPanel && !networkInLobby &&
+                               (networkInputMode == 7 || networkInputMode == 10)) {
+                        DO_CONNECT:
                         // Connect to server
                         const char* host = networkHost;
                         int port = networkPort;
@@ -1095,7 +1103,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 // "Set Name" selected (last item)
                                 networkPreNickReturnMode = 7;
                                 networkInputMode = 11;
+                                SDL_StopTextInput();
                                 SDL_StartTextInput();
+                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 break;
                             }
@@ -1104,9 +1114,12 @@ void MainMenu::HandleInput(SDL_Event *e){
                         }
                         if (networkInputMode == 10) {
                             if (netMenuIndex == 0) {
-                                // "Manual entry" selected — switch to host/port form
+                                // "Manual entry" selected — show host/port form without keyboard.
+                                // Keyboard opens only when user presses SELECT on host or port field.
                                 networkInputMode = 8;
-                                SDL_StartTextInput();
+                                networkFieldEditing = false;
+                                networkManualFieldIndex = 0;
+                                SDL_StopTextInput();
                                 break;
                             }
                             int serverIdx = netMenuIndex - 1;
@@ -1114,7 +1127,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                                 // "Set Name" selected (last item)
                                 networkPreNickReturnMode = 10;
                                 networkInputMode = 11;
+                                SDL_StopTextInput();
                                 SDL_StartTextInput();
+                                { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
                                 AudioMixer::Instance()->PlaySFX("menu_selected");
                                 break;
                             }
@@ -1214,7 +1229,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                         // Enter chat mode
                         networkInputMode = 4;
                         networkChatInput[0] = '\0';
+                        SDL_StopTextInput();
                         SDL_StartTextInput();
+                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
@@ -1223,7 +1240,9 @@ void MainMenu::HandleInput(SDL_Event *e){
                         // Enter username change mode
                         networkInputMode = 5;
                         networkUsername[0] = '\0';
+                        SDL_StopTextInput();
                         SDL_StartTextInput();
+                        { SDL_Rect r = {160, 152, 320, 20}; SDL_SetTextInputRect(&r); }
                         AudioMixer::Instance()->PlaySFX("menu_selected");
                     }
                     break;
@@ -1268,8 +1287,14 @@ void MainMenu::HandleInput(SDL_Event *e){
                             SDL_StopTextInput();
                             break;
                         } else if (networkInputMode == 8 || networkInputMode == 9) {
-                            // Back from manual entry to public server list
-                            networkInputMode = 10;
+                            if (networkFieldEditing) {
+                                // ESC while keyboard is open: close keyboard, stay on form
+                                networkFieldEditing = false;
+                                SDL_StopTextInput();
+                            } else {
+                                // ESC with no keyboard: back to public server list
+                                networkInputMode = 10;
+                            }
                             break;
                         } else if (networkInputMode == 10) {
                             // Close net panel
@@ -2349,8 +2374,8 @@ void MainMenu::NetPanelRender() {
     if (!networkInLobby) {
         // Connection screen — render in segments so active field can be colored
         const char* titleStr = serverHosting ? "Hosting Server" : "Join Server";
-        bool hostActive = (networkInputMode == 0 || networkInputMode == 8);
-        bool portActive = (networkInputMode == 1 || networkInputMode == 9);
+        bool hostActive = networkManualFieldIndex == 0;
+        bool portActive = networkManualFieldIndex == 1;
         SDL_Color white  = {255, 255, 255, 255};
         SDL_Color black  = {0, 0, 0, 255};
         SDL_Color yellow = {255, 220, 50, 255};
@@ -2363,21 +2388,30 @@ void MainMenu::NetPanelRender() {
             y += panelText.Coords()->h;
         };
 
-        int y = 300;  // Render near bottom so virtual keyboard doesn't cover it
+        int y = (480/2) - 120;
         char lineBuf[280];
 
         snprintf(lineBuf, sizeof(lineBuf), "%s\n\n", titleStr);
         renderLine(lineBuf, white, y);
 
-        snprintf(lineBuf, sizeof(lineBuf), hostActive ? "Host: [ %s_ ]" : "Host:   %s  ", networkHost);
+        bool connectActive = (!networkFieldEditing && networkManualFieldIndex == 2);
+
+        snprintf(lineBuf, sizeof(lineBuf), hostActive && networkFieldEditing ? "Host: [ %s_ ]" : "Host:   %s  ", networkHost);
         renderLine(lineBuf, hostActive ? yellow : white, y);
 
-        snprintf(lineBuf, sizeof(lineBuf), portActive ? "Port: [ %d_ ]" : "Port:   %d  ", networkPort);
+        snprintf(lineBuf, sizeof(lineBuf), portActive && networkFieldEditing ? "Port: [ %d_ ]" : "Port:   %d  ", networkPort);
         renderLine(lineBuf, portActive ? yellow : white, y);
 
-        snprintf(lineBuf, sizeof(lineBuf), "\n%sUP/DOWN to switch fields\nENTER to connect\nESC to %s",
-            serverHosting ? "Server running...\n\n" : "\n",
-            serverHosting ? "stop server and cancel" : "cancel");
+        snprintf(lineBuf, sizeof(lineBuf), connectActive ? "[ Connect ]" : "  Connect  ");
+        renderLine(lineBuf, connectActive ? yellow : white, y);
+
+        if (networkFieldEditing) {
+            snprintf(lineBuf, sizeof(lineBuf), "\n%sENTER to confirm  ESC to cancel",
+                serverHosting ? "Server running...\n\n" : "\n");
+        } else {
+            snprintf(lineBuf, sizeof(lineBuf), "\n%sUP/DOWN to navigate  ENTER to select\nESC to go back",
+                serverHosting ? "Server running...\n\n" : "\n");
+        }
         renderLine(lineBuf, white, y);
 
         if (!connectErrorMsg.empty()) {
@@ -2538,6 +2572,7 @@ void MainMenu::NetPanelRender() {
         netText[sizeof(netText) - 1] = '\0';
     }
 
+    panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), netText, 0);
     panelText.UpdatePosition({(640/2) - (panelText.Coords()->w / 2), (480/2) - 120});
     SDL_RenderCopy(const_cast<SDL_Renderer*>(renderer), panelText.Texture(), nullptr, panelText.Coords());
