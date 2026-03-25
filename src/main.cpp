@@ -17,7 +17,6 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#define SDL_MAIN_HANDLED
 #include "platform.h"
 #include "frozenbubble.h"
 
