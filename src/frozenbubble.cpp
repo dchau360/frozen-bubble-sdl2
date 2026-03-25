@@ -122,7 +122,7 @@ FrozenBubble::FrozenBubble() {
 
     if(!window) {
         IsGameQuit = true;
-        std::cout << "Failed to create window: " << SDL_GetError() << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create window: %s", SDL_GetError());
     }
 
     SDL_Surface *icon = SDL_LoadBMP(ASSET("/gfx/pinguins/window_icon_penguin.bmp").c_str());
@@ -138,13 +138,13 @@ FrozenBubble::FrozenBubble() {
 
     if(!renderer) {
         IsGameQuit = true;
-        std::cout << "Failed to create renderer: " << SDL_GetError() << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create renderer: %s", SDL_GetError());
     }
 
     if( TTF_Init() == -1 )
     {
         IsGameQuit = true;
-        std::cout << "Failed to initialise SDL_ttf: " << SDL_GetError() << std::endl;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL_ttf: %s", SDL_GetError());
     }
 
     audMixer = AudioMixer::Instance();
@@ -192,6 +192,7 @@ uint8_t FrozenBubble::RunForEver()
     unsigned int ticks, lasttick = 0;
     float elapsed = 0;
 
+    SDL_Log("RunForEver: starting loop (IsGameQuit=%d)", (int)IsGameQuit);
     while(!IsGameQuit) {
         lasttick = ticks;
         ticks = SDL_GetTicks();
