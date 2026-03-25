@@ -2847,7 +2847,7 @@ void BubbleGame::SetSendMalusToOne(int opponentIdx) {
 }
 
 void BubbleGame::ProcessMalusQueue(BubbleArray &bArray, int currentFrame) {
-    if (!currentSettings.networkGame && !currentSettings.mpTraining) return;
+    if (!currentSettings.networkGame && !currentSettings.mpTraining && currentSettings.playerCount < 2) return;
     if (bArray.malusQueue.empty()) return;
 
     const int MALUS_FREEZE_FRAMES = 20;  // Wait 20 frames after receiving malus (original line 2219)
