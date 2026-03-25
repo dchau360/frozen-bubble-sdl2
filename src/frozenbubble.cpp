@@ -244,7 +244,13 @@ void FrozenBubble::HandleInput(SDL_Event *e) {
             switch (e->window.event) {
                 case SDL_WINDOWEVENT_CLOSE:
                 {
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL_WINDOWEVENT_CLOSE received");
+#ifndef __ANDROID__
+                    // On Android, onDestroy/nativeSendQuit → SDL_QUIT is the correct
+                    // exit path. WINDOWEVENT_CLOSE can fire spuriously during surface
+                    // lifecycle events and must not quit the game.
                     IsGameQuit = true;
+#endif
                     break;
                 }
             }
