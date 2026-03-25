@@ -23,6 +23,7 @@
 std::string g_dataDir;
 
 #ifdef __ANDROID__
+#include <jni.h>
 #include <SDL2/SDL_rwops.h>
 #include <sys/stat.h>
 
