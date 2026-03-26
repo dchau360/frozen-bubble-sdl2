@@ -360,7 +360,8 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────
   # Netlify deploy — only on v*.*.* tag push
-  # Requires NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID GitHub secrets.
+  # Secrets:   NETLIFY_AUTH_TOKEN
+  # Variables: NETLIFY_SITE_ID
   # ────────────────────────────────────────────────────────────────
   deploy-netlify:
     name: Deploy to Netlify
@@ -380,11 +381,12 @@ jobs:
         run: netlify deploy --prod --dir=dist-wasm --message="Release ${{ github.ref_name }}"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
 
   # ────────────────────────────────────────────────────────────────
   # Itch.io deploy — only on v*.*.* tag push
-  # Requires BUTLER_CREDENTIALS, ITCHIO_USERNAME, ITCHIO_GAME secrets.
+  # Secrets:   BUTLER_CREDENTIALS
+  # Variables: ITCHIO_USERNAME, ITCHIO_GAME
   # ────────────────────────────────────────────────────────────────
   deploy-itchio:
     name: Deploy to Itch.io
@@ -397,21 +399,15 @@ jobs:
           name: WebAssembly
           path: dist-wasm
 
-      - name: Install butler
-        run: |
-          curl -L -o butler.zip \
-            https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
-          unzip butler.zip
-          chmod +x butler
-          ./butler -V
-
       - name: Deploy to Itch.io
-        run: |
-          ./butler push dist-wasm \
-            ${{ secrets.ITCHIO_USERNAME }}/${{ secrets.ITCHIO_GAME }}:html5 \
-            --userversion ${{ github.ref_name }}
+        uses: josephbmanley/butler-publish-itchio-action@master
         env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: html5
+          ITCH_GAME: ${{ vars.ITCHIO_GAME }}
+          ITCH_USER: ${{ vars.ITCHIO_USERNAME }}
+          PACKAGE: dist-wasm
+          VERSION: ${{ github.ref_name }}
 
   # ────────────────────────────────────────────────────────────────
   # Release — only on v*.*.* tag push
