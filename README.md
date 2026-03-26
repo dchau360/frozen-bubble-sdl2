@@ -142,9 +142,11 @@ Controller mapping:
 | Button | Action |
 |---|---|
 | D-pad Left/Right | Aim |
-| A | Fire / Select |
-| B | Back |
+| A / D-pad Up | Fire / Select |
+| B | Back / Exit game |
 | Start | Pause |
+
+**Key bindings** — go to Settings → Keys to bind any controller button or key to each action per player. Navigate with UP/DOWN, press ENTER to assign, then press the desired button. Select **Reset ctrl defaults** to restore D-pad + A button defaults for that player's controller slot.
 
 ### Entering text (IP address, nickname, etc.)
 
@@ -181,7 +183,6 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 - [ ] Implement single-player malus targeting to match original Perl behavior
 - [ ] Polish network lobby room/player list layout
 - [ ] WebAssembly: implement public server fetch via `emscripten_fetch`
-- [ ] Finish local multiplayer (controller support, 2–5 players)
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
 
@@ -189,6 +190,9 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ## New in v2.3.1
 
+- **Xbox controller support** — fully working in 1P and 2P local modes; bind any button in Settings → Keys
+- **Reset controller defaults** — one-click reset to D-pad + A button layout per player in key bindings
+- **Bubble centering fix** — all players now land at the same column when shooting straight up
 - **Exit button** — replaced High Scores menu button with an Exit App button
 - **Net game manual entry** — added visible Connect button; navigate with UP/DOWN, ENTER to select
 - **Net game lobby text color** — fixed text appearing all red after a failed connection attempt
@@ -203,7 +207,7 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 - **Per-player lobby settings grid** — Colors, Rows collapse, and Aim guide shown as a P1–P5 column grid; host navigates with arrow keys and Enter
 - **Aim guide** — trajectory preview toggle per player
 - **Row compression toggle** per player — disable rows collapsing for specific players
-- **Local multiplayer** — 2–5 players on controllers *(work in progress)*
+- **Local multiplayer** — 2–5 players on controllers
 
 ---
 
@@ -229,7 +233,7 @@ Features ported from the original Frozen Bubble 2 Perl source:
 | Multiplayer training mode | ✅ |
 | Geolocation dots on world map lobby | ✅ |
 | Aim guide (trajectory preview) | ✅ (added beyond original) |
-| Local multiplayer (2–5 players, controllers) | ⏳ WIP |
+| Local multiplayer (2–5 players, controllers) | ✅ |
 | Single-player malus targeting logic | ⏳ (placeholder) |
 | macOS, Windows, Android TV, WebAssembly | ✅ (original was Linux-only) |
 

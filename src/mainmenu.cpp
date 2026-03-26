@@ -498,11 +498,11 @@ void MainMenu::HandleInput(SDL_Event *e){
                 } else if (!awaitKp) {
                     // UP/DOWN: navigate keys within current player
                     if (e->key.keysym.sym == SDLK_UP) {
-                        keyConfigIndex = (keyConfigIndex == 0) ? 3 : keyConfigIndex - 1;
+                        keyConfigIndex = (keyConfigIndex == 0) ? 4 : keyConfigIndex - 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_DOWN) {
-                        keyConfigIndex = (keyConfigIndex == 3) ? 0 : keyConfigIndex + 1;
+                        keyConfigIndex = (keyConfigIndex == 4) ? 0 : keyConfigIndex + 1;
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_LEFT) {
@@ -518,9 +518,26 @@ void MainMenu::HandleInput(SDL_Event *e){
                         AudioMixer::Instance()->PlaySFX("menu_change");
                         break;
                     } else if (e->key.keysym.sym == SDLK_RETURN) {
-                        // Wait for key press
-                        AudioMixer::Instance()->PlaySFX("menu_selected");
-                        awaitKp = true;
+                        if (keyConfigIndex == 4) {
+                            // Reset current player to default controller bindings
+                            GameSettings* gs = GameSettings::Instance();
+                            PlayerKeys* allKeys[5] = {
+                                &gs->player1Keys, &gs->player2Keys, &gs->player3Keys,
+                                &gs->player4Keys, &gs->player5Keys
+                            };
+                            int slot = keyConfigPlayer - 1;
+                            PlayerKeys& keys = *allKeys[slot];
+                            keys.left   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+                            keys.right  = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+                            keys.fire   = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_A);
+                            keys.center = (SDL_Scancode)(CTRL_SC_BASE + slot * 20 + SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+                            gs->SaveKeys();
+                            AudioMixer::Instance()->PlaySFX("typewriter");
+                        } else {
+                            // Wait for key press
+                            AudioMixer::Instance()->PlaySFX("menu_selected");
+                            awaitKp = true;
+                        }
                         break;
                     }
                 }
@@ -1765,6 +1782,7 @@ void MainMenu::KeysPanelRender() {
         "%sturn right?  %s\n"
         "%sfire?        %s\n"
         "%scenter?      %s\n\n"
+        "%sReset ctrl defaults\n\n"
         "%s\n"
         "UP/DOWN select, ENTER change\n"
         "ESC when done",
@@ -1773,6 +1791,7 @@ void MainMenu::KeysPanelRender() {
         keyConfigIndex == 1 ? indicator : "  ", ControllerScancodeName(pk.right).c_str(),
         keyConfigIndex == 2 ? indicator : "  ", ControllerScancodeName(pk.fire).c_str(),
         keyConfigIndex == 3 ? indicator : "  ", ControllerScancodeName(pk.center).c_str(),
+        keyConfigIndex == 4 ? indicator : "  ",
         awaitKp ? "Press button or key..." : "");
 
     panelText.UpdateText(const_cast<SDL_Renderer *>(renderer), keyText, 0);
