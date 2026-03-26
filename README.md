@@ -127,7 +127,15 @@ Submit a PR to [frozen-bubble-servers](https://github.com/dchau360/frozen-bubble
 
 ## Android TV
 
-See [`android/SETUP.md`](android/SETUP.md) for build instructions.
+### Installing via Downloader app
+
+The easiest way to sideload on Fire TV:
+
+1. Install the **Downloader** app from the Amazon Appstore
+2. Open Downloader and enter code **5985774** (or URL: http://aftv.news/5985774)
+3. Follow the prompts to install
+
+See [`android/SETUP.md`](android/SETUP.md) for build-from-source instructions.
 
 Controller mapping:
 
