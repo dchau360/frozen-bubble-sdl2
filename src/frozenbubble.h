@@ -90,6 +90,12 @@ private:
     TTFText menuText;
 
     void HandleInput(SDL_Event *e);
+    void RunOneFrame();
+
+    // Frame timing — used by RunOneFrame (persist across calls in WASM)
+    unsigned int frameTicks = 0;
+    unsigned int frameLastTick = 0;
+    float frameTime = 1000.0f / 60.0f;
 
     static FrozenBubble* ptrInstance;
     FrozenBubble();

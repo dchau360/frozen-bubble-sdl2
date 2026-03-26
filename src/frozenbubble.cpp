@@ -194,69 +194,87 @@ FrozenBubble::~FrozenBubble() {
     Logger::Shutdown();
 }
 
+#ifdef __WASM_PORT__
+#include <emscripten.h>
+static void wasm_one_frame() {
+    FrozenBubble* fb = FrozenBubble::Instance();
+    if (fb) fb->RunOneFrame();
+}
+#endif
+
 uint8_t FrozenBubble::RunForEver()
 {
-    // on init, try playing one of these songs depending on the current state:
     if(currentState == TitleScreen) audMixer->PlayMusic("intro");
-    //else if (currentState == MainGame) mainGame->NewGame({false, 1, false});
 
-    float framerate = 60;
-    float frametime = 1/framerate * 1000;
+    frameLastTick = SDL_GetTicks();
+    frameTicks    = frameLastTick;
 
-    unsigned int ticks, lasttick = 0;
-    float elapsed = 0;
+    SDL_Log("RunForEver: starting loop");
 
-    SDL_Log("RunForEver: starting loop (IsGameQuit=%d)", (int)IsGameQuit);
+#ifdef __WASM_PORT__
+    // Emscripten: hand control back to the browser and call RunOneFrame each tick.
+    // fps=0 uses requestAnimationFrame (matches display refresh rate).
+    emscripten_set_main_loop(wasm_one_frame, 0, 0);
+    return 0;
+#else
     while(!IsGameQuit) {
-        lasttick = ticks;
-        ticks = SDL_GetTicks();
-        elapsed = ticks - lasttick;
-
-        // handle input
-        SDL_Event e;
-        while (SDL_PollEvent (&e)) {
-            // Log any event that could cause quit, for debugging
-            if (e.type == SDL_QUIT || e.type == SDL_APP_TERMINATING ||
-                (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE) ||
-                (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "Quit-triggering event: type=0x%x winev=%d key=%d",
-                    e.type, e.window.event, e.key.keysym.sym);
-            }
-            // Translate controller events to keyboard events before HandleInput
-            if (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_CONTROLLERBUTTONUP ||
-                e.type == SDL_CONTROLLERAXISMOTION  || e.type == SDL_CONTROLLERDEVICEADDED) {
-                HandleControllerEvent(&e);
-                continue;
-            }
-            HandleInput(&e);
-        }
-
-        // render
-        if(!IsGamePause) {
-            SDL_RenderClear(renderer);
-            if (currentState == TitleScreen) mainMenu->Render();
-            else if (currentState == MainGame) mainGame->Render();
-            else if (currentState == Highscores) {
-                if (hiscoreManager->lastState == 1) mainGame->Render();
-                hiscoreManager->RenderScoreScreen();
-            }
-            SDL_RenderPresent(renderer);
-        }
-        else {
-            if (currentState == MainGame){
-                mainGame->RenderPaused();
-                SDL_RenderPresent(renderer);
-            }
-        }
-        if(elapsed < frametime) {
-            SDL_Delay(frametime - elapsed);
-        }
+        RunOneFrame();
     }
     if (startTime != 0) addictedTime += SDL_GetTicks() - startTime;
     if(addictedTime != 0) printf("Addicted for %s, %d bubbles were launched.", formatTime(addictedTime/1000), totalBubbles);
     this->~FrozenBubble();
     return 0;
+#endif
+}
+
+void FrozenBubble::RunOneFrame()
+{
+    frameLastTick = frameTicks;
+    frameTicks    = SDL_GetTicks();
+    float elapsed = (float)(frameTicks - frameLastTick);
+
+    // handle input
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_QUIT || e.type == SDL_APP_TERMINATING ||
+            (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_CLOSE) ||
+            (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                "Quit-triggering event: type=0x%x winev=%d key=%d",
+                e.type, e.window.event, e.key.keysym.sym);
+        }
+        if (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_CONTROLLERBUTTONUP ||
+            e.type == SDL_CONTROLLERAXISMOTION  || e.type == SDL_CONTROLLERDEVICEADDED) {
+            HandleControllerEvent(&e);
+            continue;
+        }
+        HandleInput(&e);
+    }
+
+    // render
+    if(!IsGamePause) {
+        SDL_RenderClear(renderer);
+        if (currentState == TitleScreen) mainMenu->Render();
+        else if (currentState == MainGame) mainGame->Render();
+        else if (currentState == Highscores) {
+            if (hiscoreManager->lastState == 1) mainGame->Render();
+            hiscoreManager->RenderScoreScreen();
+        }
+        SDL_RenderPresent(renderer);
+    } else {
+        if (currentState == MainGame) {
+            mainGame->RenderPaused();
+            SDL_RenderPresent(renderer);
+        }
+    }
+
+#ifndef __WASM_PORT__
+    // On native, cap frame rate manually. In WASM the browser's
+    // requestAnimationFrame already limits to the display refresh rate.
+    if (elapsed < frameTime) {
+        SDL_Delay((Uint32)(frameTime - elapsed));
+    }
+#endif
 }
 
 void FrozenBubble::PushKey(SDL_Keycode key, bool down) {
