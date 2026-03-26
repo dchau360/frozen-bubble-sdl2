@@ -321,17 +321,82 @@ jobs:
           path: frozen-bubble-android-tv.apk
 
   # ────────────────────────────────────────────────────────────────
+  # WebAssembly → Netlify
+  # ────────────────────────────────────────────────────────────────
+  build-wasm:
+    name: WebAssembly (Netlify)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Build WASM
+        run: |
+          mv CMakeLists.txt CMakeLists.txt.native
+          cp CMakeListsEmscripten.txt CMakeLists.txt
+          mkdir build-wasm
+          emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release .
+          emmake make -C build-wasm -j$(nproc)
+          mv CMakeLists.txt.native CMakeLists.txt
+
+      - name: Collect deploy files
+        run: |
+          mkdir dist-wasm
+          cp web/index.html dist-wasm/
+          cp build-wasm/frozen-bubble-sdl2.js    dist-wasm/
+          cp build-wasm/frozen-bubble-sdl2.wasm  dist-wasm/
+          cp build-wasm/frozen-bubble-sdl2.data  dist-wasm/ 2>/dev/null || true
+          cp netlify.toml dist-wasm/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WebAssembly
+          path: dist-wasm/
+
+  # ────────────────────────────────────────────────────────────────
+  # Netlify deploy — only on v*.*.* tag push
+  # Requires NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID GitHub secrets.
+  # ────────────────────────────────────────────────────────────────
+  deploy-netlify:
+    name: Deploy to Netlify
+    needs: build-wasm
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: WebAssembly
+          path: dist-wasm
+
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
+
+      - name: Deploy to Netlify
+        run: netlify deploy --prod --dir=dist-wasm --message="Release ${{ github.ref_name }}"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+  # ────────────────────────────────────────────────────────────────
   # Release — only on v*.*.* tag push
   # ────────────────────────────────────────────────────────────────
   release:
     name: Create Release
-    needs: [build-linux, build-macos, build-windows, build-android]
+    needs: [build-linux, build-macos, build-windows, build-android, build-wasm]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+
+      - name: Zip WASM build for self-hosting
+        run: cd WebAssembly && zip -r ../frozen-bubble-web.zip . && cd ..
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -341,3 +406,4 @@ jobs:
             macOS/frozen-bubble-macos.dmg
             Windows/frozen-bubble-windows-setup.exe
             Android/frozen-bubble-android-tv.apk
+            frozen-bubble-web.zip
