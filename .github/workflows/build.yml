@@ -360,14 +360,15 @@ jobs:
           path: dist-wasm/
 
   # ────────────────────────────────────────────────────────────────
-  # Netlify deploy — only on v*.*.* tag push
+  # Netlify deploy — disabled (deploy limit exceeded)
+  # Re-enable by removing the `if: false` line below
   # Secrets:   NETLIFY_AUTH_TOKEN
   # Variables: NETLIFY_SITE_ID
   # ────────────────────────────────────────────────────────────────
   deploy-netlify:
     name: Deploy to Netlify
     needs: build-wasm
-    if: startsWith(github.ref, 'refs/tags/')
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
