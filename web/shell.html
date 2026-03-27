@@ -96,10 +96,18 @@
 
     // Prevent browser from acting on navigation/game keys (Backspace = back,
     // arrows = scroll, space = scroll, etc.) while the canvas is in use.
-    window.addEventListener('keydown', function(e) {
+    // Use capture phase (true) on both window and document to intercept
+    // before any other handler — including the browser's back-navigation handler.
+    function preventNavKeys(e) {
       var nav = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '];
-      if (nav.indexOf(e.key) !== -1) e.preventDefault();
-    }, false);
+      // e.key check (modern) + keyCode fallback (Backspace=8, Delete=46, arrows=37-40, space=32)
+      var code = e.keyCode || e.which;
+      if (nav.indexOf(e.key) !== -1 || (code >= 32 && code <= 40) || code === 8 || code === 46) {
+        e.preventDefault();
+      }
+    }
+    window.addEventListener('keydown', preventNavKeys, true);
+    document.addEventListener('keydown', preventNavKeys, true);
   </script>
   {{{ SCRIPT }}}
 </body>
