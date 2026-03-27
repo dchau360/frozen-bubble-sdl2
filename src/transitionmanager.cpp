@@ -45,8 +45,11 @@ void TransitionManager::Dispose(){
     this->~TransitionManager();
 }
 
-void TransitionManager::DoSnipIn(SDL_Renderer *rend) 
+void TransitionManager::DoSnipIn(SDL_Renderer *rend)
 {
+#ifdef __WASM_PORT__
+    return;  // Blocking animation loop hangs the browser; skip in WASM
+#endif
     if (gameSettings->gfxLevel() > 2) return;
     float w = 0, h = 0;
     SDL_RenderGetScale(rend, &w, &h);
@@ -57,8 +60,11 @@ void TransitionManager::DoSnipIn(SDL_Renderer *rend)
     SDL_FreeSurface(sfc);
 }
 
-void TransitionManager::TakeSnipOut(SDL_Renderer *rend) 
+void TransitionManager::TakeSnipOut(SDL_Renderer *rend)
 {
+#ifdef __WASM_PORT__
+    return;  // Blocking animation loop hangs the browser; skip in WASM
+#endif
     if (gameSettings->gfxLevel() > 2) return;
     float w = 0, h = 0;
     SDL_RenderGetScale(rend, &w, &h);
