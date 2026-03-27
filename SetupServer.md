@@ -27,8 +27,8 @@ This guide walks through running a public server that supports both:
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/dchau360/frozen-bubble-multiplayer.git
-cd frozen-bubble-multiplayer
+git clone https://github.com/dchau360/frozen-bubble-sdl2.git
+cd frozen-bubble-sdl2
 ```
 
 ### 2. Get a free SSL certificate
