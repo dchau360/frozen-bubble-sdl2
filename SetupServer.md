@@ -12,13 +12,28 @@ This guide walks through running a public server that supports both:
 | What | Why |
 |---|---|
 | A domain name pointing to your server | **Required for browser clients.** Browsers block unencrypted WebSocket connections (`ws://`) from HTTPS pages. You need a real domain so Let's Encrypt can issue a valid TLS certificate. A plain IP address will not work for browser players. |
-| A Linux VPS | Any provider (DigitalOcean, Linode, Hetzner, etc.) |
+| A Linux VPS | Any provider (DigitalOcean, Linode, Hetzner, etc.). Oracle Cloud's **Always Free** tier works well — see note below. |
 | Ports 80, 443, 1511 open | In your VPS firewall / security group |
 | Docker + Docker Compose installed | [Install Docker](https://docs.docker.com/engine/install/) |
 
 > **Browser clients only work with a valid SSL certificate on a real domain.**
 > Self-signed certificates will be rejected by browsers. Native desktop and Android
 > clients are not affected — they connect on port 1511 without SSL.
+
+### Oracle Cloud Always Free tier
+
+Oracle Cloud's Always Free tier is a good zero-cost option. It includes 2 AMD VMs (1 OCPU, 1 GB RAM) and up to 4 ARM instances — any of these are more than enough to run fb-server.
+
+**Oracle-specific gotcha:** Oracle Cloud images have OS-level `iptables` rules that block ports even after you open them in the VCN security list. After opening ports 80, 443, and 1511 in the security list, also run this on the instance:
+
+```bash
+sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 1511 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+Without this step the ports will appear open in Oracle's dashboard but connections will silently time out.
 
 ---
 
