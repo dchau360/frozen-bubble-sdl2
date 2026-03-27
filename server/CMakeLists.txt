@@ -22,6 +22,7 @@ add_executable(fb-server
     net.c
     tools.c
     stats.c
+    ws.c
 )
 
 target_compile_definitions(fb-server PUBLIC VERSION="2.2.1")

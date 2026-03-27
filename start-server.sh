@@ -54,7 +54,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "Starting server on port $PORT..."
-echo "  TCP: LAN + internet (Net Game) connections"
+echo "  TCP: native clients (desktop, Android)"
+echo "  WebSocket: browser clients (WASM / itch.io) — same port, auto-detected"
 echo "  UDP: LAN broadcast discovery"
 echo "Press Ctrl+C to stop the server"
 echo ""

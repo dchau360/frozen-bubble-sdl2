@@ -52,6 +52,7 @@
 #include "tools.h"
 #include "log.h"
 #include "net.h"
+#include "ws.h"
 
 /* this is set in game.c and used here for answering with
  * the requested command without passing this additional arg */
@@ -129,6 +130,8 @@ static ssize_t send_line(int fd, char* msg)
                 buf[sizeof(buf)-2] = '\n';
         }
         if (size > 0) {
+                if (ws_is_websocket(fd))
+                        return ws_send(fd, buf, size);
                 return send(fd, buf, size, MSG_NOSIGNAL);
         } else {
                 l2(OUTPUT_TYPE_ERROR, "[%d] Format failure, impossible to send message '%s'", fd, msg);
@@ -189,6 +192,7 @@ void conn_terminated(int fd, char* reason)
         if (g_list_find(new_conns, GINT_TO_POINTER(fd))) {  // we can be recursively called if two players disconnect at the exact same time
                 l2(OUTPUT_TYPE_CONNECT, "[%d] Closing connection: %s", fd, reason);
                 SOCKET_CLOSE(fd);
+                ws_reset(fd);
                 free(incoming_data_buffers[fd]);
                 if (nick[fd] != NULL) {
                         free(nick[fd]);
@@ -249,10 +253,29 @@ static void handle_incoming_data_generic(gpointer data, gpointer user_data, int 
                         }
 
                         len += offset;
+
+                        // For WebSocket connections, decode frames before processing.
+                        // Browser clients send each game message as a single WS text frame.
+                        if (ws_is_websocket(fd) && len > 0) {
+                                int decoded = (int)len;
+                                int result = ws_decode_inplace(buf, &decoded);
+                                if (result < 0) {
+                                        conn_terminated(fd, "websocket protocol error");
+                                        return;
+                                }
+                                if (result == 0) {
+                                        // Incomplete frame — save raw bytes and wait for more data
+                                        memcpy(incoming_data_buffers[fd], buf, (size_t)decoded);
+                                        incoming_data_buffers_count[fd] = decoded;
+                                        return;
+                                }
+                                len = (ssize_t)decoded;
+                        }
+
                         // If we don't have a newline, it means we are seeing a partial send. Buffer
                         // them, since we can't synchronously wait for newline now or else we'd offer a
                         // nice easy shot for DOS (and beside, this would slow down the whole rest).
-                        if (buf[len-1] != '\n') {
+                        if (len == 0 || buf[len-1] != '\n') {
                                 if (len == INCOMING_DATA_BUFSIZE - 1) {
                                         send_line_log_push(fd, fl_client_nolf);
                                         conn_terminated(fd, "too much data without LF");
@@ -525,6 +548,10 @@ void connections_manager(void)
                         IP[fd] = strdup_(inet_ntoa(client_addr.sin_addr));
                         prio[fd] = 0;
                         remote_proto_minor[fd] = -1;
+                        // Detect browser WebSocket clients (they send HTTP upgrade immediately).
+                        // Native TCP clients wait for the server greeting, so ws_detect_and_upgrade
+                        // will time out quickly and return 0 for them.
+                        ws_detect_and_upgrade(fd);
                         send_line_log_push(fd, get_greets_msg());
                         conns = g_list_append(conns, GINT_TO_POINTER(fd));
                         player_connects(fd);

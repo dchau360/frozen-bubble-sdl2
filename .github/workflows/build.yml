@@ -321,12 +321,10 @@ jobs:
           path: frozen-bubble-android-tv.apk
 
   # ────────────────────────────────────────────────────────────────
-  # WebAssembly — disabled pending fork into dedicated web repo
-  # Re-enable by removing the `if: false` line below
+  # WebAssembly — enabled in this multiplayer fork
   # ────────────────────────────────────────────────────────────────
   build-wasm:
-    name: WebAssembly (Netlify)
-    if: false
+    name: WebAssembly (Itch.io)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
