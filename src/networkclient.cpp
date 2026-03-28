@@ -870,12 +870,15 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
 
     // Handle other responses
     if (response.find("OK") != std::string::npos) {
-        SDL_Log("Command successful");
+        SDL_Log("Command successful: %s", response.c_str());
         lastErrorResponse.clear();
 #ifdef __WASM_PORT__
-        // Confirm a pending WASM CREATE once the server sends "OK: CREATE <nick>"
-        if (pendingCreate && response.find("CREATE") != std::string::npos) {
-            SDL_Log("CREATE confirmed by server: game '%s'", pendingCreateNick.c_str());
+        // Confirm a pending WASM CREATE on any OK response that isn't PART: OK.
+        // We only need pendingCreate here — CREATE is the only command that sets it.
+        // Exclude PART: OK (which arrives when we send PART before a CREATE retry)
+        // so we don't prematurely confirm until the retry CREATE OK arrives.
+        if (pendingCreate && response.find("PART") == std::string::npos) {
+            SDL_Log("CREATE confirmed by server (pendingCreate=true): game '%s'", pendingCreateNick.c_str());
             state = IN_LOBBY;
             playerNick = pendingCreateNick;
             myNickname = pendingCreateNick;
