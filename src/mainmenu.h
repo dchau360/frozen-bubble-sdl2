@@ -22,6 +22,9 @@
 
 #include <SDL2/SDL.h>
 #include <vector>
+#include <thread>
+#include <atomic>
+#include <mutex>
 
 #include "menubutton.h"
 #include "networkclient.h"
@@ -144,6 +147,10 @@ private:
     // Net game public server list (mode 10)
     std::vector<ServerInfo> publicServers;
     int netMenuIndex = 0; // 0 = "Manual entry", 1+ = public servers
+    std::atomic<bool> serverFetchInProgress{false}; // true while background fetch is running
+    std::thread serverFetchThread;
+    std::mutex serverFetchMutex;
+    std::vector<ServerInfo> serverFetchResult; // written by bg thread, swapped in on completion
 
     //Network panel render
     bool showingNetPanel = false;

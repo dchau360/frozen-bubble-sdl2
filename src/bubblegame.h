@@ -377,8 +377,8 @@ private:
     SDL_Texture *imgMiniColorblindBubbles[BUBBLE_STYLES];
     SDL_Texture *imgMiniBubbles[BUBBLE_STYLES];
 
-    SDL_Texture *imgBubbleStick[BUBBLE_STICKFC];
-    SDL_Texture *imgMiniBubbleStick[BUBBLE_STICKFC];
+    SDL_Texture *imgBubbleStick[BUBBLE_STICKFC + 1];
+    SDL_Texture *imgMiniBubbleStick[BUBBLE_STICKFC + 1];
 
     SDL_Texture *imgBubbleFrozen, *imgMiniBubbleFrozen;
     SDL_Texture *imgBubblePrelight, *imgMiniBubblePrelight;

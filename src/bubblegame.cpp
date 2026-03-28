@@ -264,7 +264,7 @@ BubbleGame::BubbleGame(const SDL_Renderer *renderer)
     }
 
     for (int i = 0; i < 35; i++) {
-        snprintf(rel, sizeof(rel), "/gfx/pause_%04d.png", i);
+        snprintf(rel, sizeof(rel), "/gfx/pause_%04d.png", i + 1);
         pausePenguin[i] = IMG_LoadTexture(rend, ASSET(rel).c_str());
     }
 

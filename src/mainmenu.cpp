@@ -28,6 +28,8 @@
 #include <cstring>
 #include <cmath>
 #include <errno.h>
+#include <thread>
+#include <mutex>
 #ifndef _WIN32
 #include <unistd.h>
 #include <sys/wait.h>
@@ -194,6 +196,7 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
 }
 
 MainMenu::~MainMenu() {
+    if (serverFetchThread.joinable()) serverFetchThread.join();
     SDL_DestroyTexture(background);
     SDL_DestroyTexture(fbLogo);
     buttons.clear();
@@ -2364,6 +2367,13 @@ void MainMenu::NetPanelRender() {
     }
 
     if (!networkInLobby && networkInputMode == 10) {
+        // Poll background server fetch result
+        if (!serverFetchInProgress.load() && publicServers.empty()) {
+            std::lock_guard<std::mutex> lock(serverFetchMutex);
+            publicServers = std::move(serverFetchResult);
+            serverFetchResult.clear();
+        }
+
         // Net game public server list screen
         SDL_Color white  = {255, 255, 255, 255};
         SDL_Color black  = {0, 0, 0, 255};
@@ -2390,7 +2400,9 @@ void MainMenu::NetPanelRender() {
 
         // Menu items 1+: public internet servers only
         // (Local LAN server is accessible via the LAN Game panel instead)
-        if (publicServers.empty()) {
+        if (serverFetchInProgress.load()) {
+            renderLine("  (fetching server list...)", grey, y);
+        } else if (publicServers.empty()) {
             renderLine("  (no public servers listed)", white, y);
         } else {
             for (int i = 0; i < (int)publicServers.size(); i++) {
@@ -2816,23 +2828,32 @@ void MainMenu::ShowPanel(int which) {
             showingNetPanel = true;
             networkInLobby = false;
             networkInputMode = 10; // Public server list
-            publicServers = NetworkClient::FetchPublicServers();
-            // Also add local server if running
-            {
-                bool foundLocal = false;
-                for (const auto& s : publicServers)
-                    if (s.host == "127.0.0.1" || s.host == "localhost") { foundLocal = true; break; }
-                if (!foundLocal && portInUse(1511)) {
-                    ServerInfo localServer;
-                    localServer.host = "127.0.0.1";
-                    localServer.port = 1511;
-                    localServer.name = "Local Server";
-                    localServer.latencyMs = 0;
-                    publicServers.insert(publicServers.begin(), localServer);
-                }
+            publicServers.clear();
+            // Start background fetch so the UI opens immediately
+            if (!serverFetchInProgress.load()) {
+                serverFetchInProgress = true;
+                if (serverFetchThread.joinable()) serverFetchThread.join();
+                serverFetchThread = std::thread([this]() {
+                    std::vector<ServerInfo> fetched = NetworkClient::FetchPublicServers();
+                    // Add local server if running
+                    bool foundLocal = false;
+                    for (const auto& s : fetched)
+                        if (s.host == "127.0.0.1" || s.host == "localhost") { foundLocal = true; break; }
+                    if (!foundLocal && portInUse(1511)) {
+                        ServerInfo localServer;
+                        localServer.host = "127.0.0.1";
+                        localServer.port = 1511;
+                        localServer.name = "Local Server";
+                        localServer.latencyMs = 0;
+                        fetched.insert(fetched.begin(), localServer);
+                    }
+                    for (auto& s : fetched)
+                        s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
+                    std::lock_guard<std::mutex> lock(serverFetchMutex);
+                    serverFetchResult = std::move(fetched);
+                    serverFetchInProgress = false;
+                });
             }
-            for (auto& s : publicServers)
-                s.latencyMs = NetworkClient::MeasureLatency(s.host.c_str(), s.port);
             break;
         }
         case 4: // keys configuration
