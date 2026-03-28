@@ -1640,8 +1640,8 @@ void MainMenu::TPPanelRender() {
         "2-player game\n\n"
         "%s Chain-reaction: %s\n"
         "%s Victories limit: %s\n"
-        "%s Colors P1: %d\n"
-        "%s Colors P2: %d\n"
+        "%s Max colors P1: %d\n"
+        "%s Max colors P2: %d\n"
         "%s Start game!\n\n\n"
         "Use UP/DOWN to select\n"
         "LEFT/RIGHT or ENTER to change\n"
@@ -1702,7 +1702,7 @@ void MainMenu::LocalMPPanelRender() {
     }
     for (int pi = 0; pi < localMPPlayerCount && pi < 5; pi++) {
         pos += snprintf(pnltxt + pos, sizeof(pnltxt) - pos,
-            "%s Colors P%d: %d\n",
+            "%s Max colors P%d: %d\n",
             localMPMenuIndex == 3 + localMPPlayerCount + pi ? ">" : " ",
             pi + 1,
             playerColorCounts[pi]);
@@ -2038,7 +2038,7 @@ void MainMenu::NetPanelRender() {
             actions.push_back(victoriesText);// index 4
 
             // Per-player grid rows (indices 5-7) — label only; values rendered as grid cells below
-            actions.push_back("Colors:");    // index 5
+            actions.push_back("Max colors:"); // index 5
             actions.push_back("Rows:");      // index 6
             actions.push_back("Aim:");       // index 7
 
@@ -2096,7 +2096,7 @@ void MainMenu::NetPanelRender() {
             bool isHost = currentGame->creator == netClient->GetPlayerNick();
 
             // Column layout
-            const int labelW = 110;  // Width of row label ("Colors:", "Row collapse:", "Aim guide:")
+            const int labelW = 110;  // Width of row label ("Max colors:", "Row collapse:", "Aim guide:")
             const int colW   = 36;   // Width of each player column
 
             // Header row sits exactly one lineHeight above the first data row
@@ -2157,7 +2157,7 @@ void MainMenu::NetPanelRender() {
             }
 
             // Grid rows: Colors (5), Rows (6), Aim (7)
-            const char* rowLabels[] = {"Colors:", "Row collapse:", "Aim guide:"};
+            const char* rowLabels[] = {"Max colors:", "Row collapse:", "Aim guide:"};
             for (int row = 0; row < 3; row++) {
                 int rowIdx = gridStart + row;
                 int rowY   = actionStartY + rowIdx * lineHeight + gridYOffset;

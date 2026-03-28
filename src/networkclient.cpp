@@ -256,11 +256,11 @@ bool NetworkClient::CreateGame() {
     int suffix = 2; // Start with suffix 2 for first retry
 
 #ifdef __WASM_PORT__
-    // In WASM, SDL_Delay is a no-op and WebSocket responses arrive asynchronously
-    // (only between main-loop frames, never inside this synchronous function).
-    // Skip the retry loop entirely: send CREATE once and optimistically assume
-    // success. If the server rejects it (e.g. NICK_IN_USE) the error response
-    // will arrive via the WebSocket callback and the lobby will show the error.
+    // In WASM, WebSocket responses arrive asynchronously between frames.
+    // Send CREATE and record the pending state; HandleServerResponse() will
+    // confirm or reject and set up currentGame/state once the OK arrives.
+    // Do NOT optimistically set state=IN_LOBBY — that caused a "phantom game"
+    // bug where the client got stuck in a create-game view after server rejection.
     SDL_Log("WASM CreateGame: sending CREATE %s", tryNick.c_str());
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "CREATE %s", tryNick.c_str());
@@ -268,6 +268,11 @@ bool NetworkClient::CreateGame() {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "WASM CreateGame: SendCommand failed");
         return false;
     }
+    pendingCreate = true;
+    pendingCreateOrigNick = originalNick;
+    pendingCreateNick = tryNick;
+    pendingCreateSuffix = 2;
+    return true;  // state/currentGame set later when server sends OK
 #else
     int maxRetries = 20;
     for (int retry = 0; retry < maxRetries; retry++) {
@@ -866,18 +871,64 @@ void NetworkClient::HandleServerResponse(const std::string& response) {
     // Handle other responses
     if (response.find("OK") != std::string::npos) {
         SDL_Log("Command successful");
-        lastErrorResponse.clear(); // Clear error on success
+        lastErrorResponse.clear();
+#ifdef __WASM_PORT__
+        // Confirm a pending WASM CREATE once the server sends "OK: CREATE <nick>"
+        if (pendingCreate && response.find("CREATE") != std::string::npos) {
+            SDL_Log("CREATE confirmed by server: game '%s'", pendingCreateNick.c_str());
+            state = IN_LOBBY;
+            playerNick = pendingCreateNick;
+            myNickname = pendingCreateNick;
+            if (!currentGame) currentGame = new GameRoom();
+            currentGame->creator = pendingCreateNick;
+            currentGame->started = false;
+            NetworkPlayer self;
+            self.nick = pendingCreateNick;
+            self.ready = false;
+            currentGame->players.clear();
+            currentGame->players.push_back(self);
+            pendingCreate = false;
+        }
+#endif
     } else if (response.find("PONG") != std::string::npos) {
         SDL_Log("Ping response");
     } else if (response.find("NICK_IN_USE") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NICK_IN_USE error received");
         lastErrorResponse = "NICK_IN_USE";
+#ifdef __WASM_PORT__
+        // Retry CREATE with a suffix if the game name was taken
+        if (pendingCreate && pendingCreateSuffix <= 20) {
+            char suffixBuf[8];
+            snprintf(suffixBuf, sizeof(suffixBuf), "%d", pendingCreateSuffix);
+            std::string retryNick = pendingCreateOrigNick.substr(0, std::min((size_t)9, pendingCreateOrigNick.length())) + suffixBuf;
+            pendingCreateNick = retryNick;
+            pendingCreateSuffix++;
+            char cmd[128];
+            snprintf(cmd, sizeof(cmd), "CREATE %s", retryNick.c_str());
+            SDL_Log("CREATE NICK_IN_USE, retrying with: %s", retryNick.c_str());
+            SendCommand(cmd);
+        } else if (pendingCreate) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "CREATE failed: all nick variants in use");
+            pendingCreate = false;
+        }
+#endif
     } else if (response.find("NO_SUCH_GAME") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "NO_SUCH_GAME error received");
         lastErrorResponse = "NO_SUCH_GAME";
     } else if (response.find("ALREADY_IN_GAME") != std::string::npos) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "ALREADY_IN_GAME error received");
         lastErrorResponse = "ALREADY_IN_GAME";
+#ifdef __WASM_PORT__
+        if (pendingCreate) {
+            // Send PART to clear server-side stale game state, then retry
+            SDL_Log("CREATE rejected (ALREADY_IN_GAME), sending PART and retrying");
+            SendCommand("PART");
+            char cmd[128];
+            snprintf(cmd, sizeof(cmd), "CREATE %s", pendingCreateNick.c_str());
+            SendCommand(cmd);
+            // pendingCreate stays true, waiting for the new response
+        }
+#endif
     }
 }
 

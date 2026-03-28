@@ -181,6 +181,7 @@ void NetworkClient::Disconnect() {
     }
     state = DISCONNECTED;
     currentGame = nullptr;
+    pendingCreate = false;
     gameList.clear();
     messageQueue.clear();
 }

@@ -122,6 +122,8 @@ public:
     void ParseMessage(const char* message);
     // Called by WASM open callback to transition state to CONNECTED
     void SetConnected() { state = CONNECTED; }
+    // True while waiting for async CREATE OK/rejection from server (WASM only)
+    bool IsPendingCreate() const { return pendingCreate; }
 
     // Send game options to other players (host only)
     bool SendOptions(bool chainReaction, bool continueWhenLeave, bool singleTarget, int victoriesLimit, const int playerColors[5], const bool noCompress[5], const bool aimGuide[5]);
@@ -192,6 +194,12 @@ private:
     void HandleServerResponse(const std::string& response);
     void ParseListResponse(const char* listData);
     void HandlePushMessage(const std::string& pushMsg);
+
+    // WASM async CREATE state
+    bool pendingCreate = false;
+    std::string pendingCreateOrigNick;
+    std::string pendingCreateNick;
+    int pendingCreateSuffix = 2;
 
     static NetworkClient* ptrInstance;
 };
