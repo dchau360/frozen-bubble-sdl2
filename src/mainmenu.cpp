@@ -196,7 +196,9 @@ MainMenu::MainMenu(const SDL_Renderer *renderer)
 }
 
 MainMenu::~MainMenu() {
+#ifndef __WASM_PORT__
     if (serverFetchThread.joinable()) serverFetchThread.join();
+#endif
     SDL_DestroyTexture(background);
     SDL_DestroyTexture(fbLogo);
     buttons.clear();
@@ -2367,12 +2369,14 @@ void MainMenu::NetPanelRender() {
     }
 
     if (!networkInLobby && networkInputMode == 10) {
+#ifndef __WASM_PORT__
         // Poll background server fetch result
         if (!serverFetchInProgress.load() && publicServers.empty()) {
             std::lock_guard<std::mutex> lock(serverFetchMutex);
             publicServers = std::move(serverFetchResult);
             serverFetchResult.clear();
         }
+#endif
 
         // Net game public server list screen
         SDL_Color white  = {255, 255, 255, 255};
@@ -2829,7 +2833,11 @@ void MainMenu::ShowPanel(int which) {
             networkInLobby = false;
             networkInputMode = 10; // Public server list
             publicServers.clear();
-            // Start background fetch so the UI opens immediately
+#ifdef __WASM_PORT__
+            // WASM: FetchPublicServers() returns instantly (hardcoded list); no thread needed
+            publicServers = NetworkClient::FetchPublicServers();
+#else
+            // Native: fetch + latency probe can block for seconds — run on background thread
             if (!serverFetchInProgress.load()) {
                 serverFetchInProgress = true;
                 if (serverFetchThread.joinable()) serverFetchThread.join();
@@ -2854,6 +2862,7 @@ void MainMenu::ShowPanel(int which) {
                     serverFetchInProgress = false;
                 });
             }
+#endif
             break;
         }
         case 4: // keys configuration
