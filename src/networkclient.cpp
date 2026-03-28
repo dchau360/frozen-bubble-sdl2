@@ -91,18 +91,24 @@ bool NetworkClient::Connect(const char* host, int port) {
     // Keep socket in blocking mode for initial handshake
     // Will set non-blocking after connection established
 
-    // Setup server address
-    struct sockaddr_in serverAddr;
-    memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
+    // Resolve hostname or IP address via getaddrinfo (supports both)
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
 
-    if (inet_pton(AF_INET, host, &serverAddr.sin_addr) <= 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Invalid address: %s", host);
+    char portStr[8];
+    snprintf(portStr, sizeof(portStr), "%d", port);
+    if (getaddrinfo(host, portStr, &hints, &res) != 0 || !res) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to resolve host: %s", host);
         SOCKET_CLOSE(sockfd);
         sockfd = -1;
         return false;
     }
+
+    struct sockaddr_in serverAddr;
+    memcpy(&serverAddr, res->ai_addr, sizeof(serverAddr));
+    freeaddrinfo(res);
 
     // Connect (blocking mode)
     state = CONNECTING;
