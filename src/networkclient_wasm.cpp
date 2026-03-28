@@ -78,15 +78,39 @@ static EM_BOOL onWebSocketMessage(int /*eventType*/, const EmscriptenWebSocketMe
     WebSocketHandle* handle = (WebSocketHandle*)userData;
     if (!handle || !handle->client) return EM_TRUE;
     if (!e->data || e->numBytes == 0) return EM_TRUE;
-    // Accept both text and binary frames — server uses binary frames (opcode=2) so
-    // that GAME_CAN_START's embedded binary player-ID bytes survive the WebSocket layer.
 
-    // Message data is already in e->data as a null-terminated string when isText==true
     const char* data = (const char*)e->data;
+    int numBytes = (int)e->numBytes;
 
-    // Parse newline-delimited protocol messages
+    // In-game: messages are binary prio format — {senderId_byte}{data}\n
+    // Mirror the native TCP ProcessIncomingData logic: parse each newline-delimited
+    // message, strip the leading sender-ID byte, and enqueue as GAMEMSG:{id}:{data}.
+    if (handle->client->GetState() == IN_GAME) {
+        int pos = 0;
+        while (pos < numBytes) {
+            // Need at least 2 bytes: sender ID + at least one data byte
+            if (numBytes - pos < 2) break;
+            unsigned char senderId = (unsigned char)data[pos];
+            int msgStart = pos + 1;
+            const char* nl = (const char*)memchr(data + msgStart, '\n', numBytes - msgStart);
+            int msgLen = nl ? (int)(nl - (data + msgStart)) : (numBytes - msgStart);
+            if (msgLen > 0) {
+                char gameMsg[4096];
+                int copyLen = (msgLen < (int)sizeof(gameMsg) - 1) ? msgLen : (int)sizeof(gameMsg) - 1;
+                memcpy(gameMsg, data + msgStart, copyLen);
+                gameMsg[copyLen] = '\0';
+                char fullMsg[4096];
+                snprintf(fullMsg, sizeof(fullMsg), "GAMEMSG:%d:%s", (int)senderId, gameMsg);
+                handle->client->QueueGameMessage(std::string(fullMsg));
+            }
+            pos = nl ? (int)(nl - data) + 1 : numBytes;
+        }
+        return EM_TRUE;
+    }
+
+    // Lobby/pre-game: text protocol, newline-delimited
     const char* line = data;
-    const char* end = data + e->numBytes;
+    const char* end = data + numBytes;
     while (line < end) {
         const char* nl = (const char*)memchr(line, '\n', end - line);
         size_t len = nl ? (size_t)(nl - line) : (size_t)(end - line);
@@ -95,7 +119,6 @@ static EM_BOOL onWebSocketMessage(int /*eventType*/, const EmscriptenWebSocketMe
             size_t copyLen = (len < sizeof(msg) - 1) ? len : sizeof(msg) - 1;
             memcpy(msg, line, copyLen);
             msg[copyLen] = '\0';
-            // Strip trailing \r
             if (copyLen > 0 && msg[copyLen - 1] == '\r') msg[copyLen - 1] = '\0';
             handle->client->ParseMessage(msg);
         }
