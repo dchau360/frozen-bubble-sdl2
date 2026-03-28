@@ -34,6 +34,7 @@
 #include <glib.h>
 
 #include "net.h"
+#include "ws.h"
 #include "tools.h"
 #include "log.h"
 #include "game.h"
@@ -818,31 +819,39 @@ void process_msg_prio_(int fd, char* msg, ssize_t len, struct game* g)
                         } else if (g->players_conn[i] == fd && len > 2 && msg[1] == '!') {
                                 char synchro4self[] = "?!\n";
                                 ssize_t retval;
+                                int dest = g->players_conn[i];
                                 synchro4self[0] = fd;
-                                l1(OUTPUT_TYPE_DEBUG, "[%d] sending self synchro", g->players_conn[i]);
-                                retval = send(g->players_conn[i], synchro4self, sizeof(synchro4self) - 1, MSG_NOSIGNAL|MSG_DONTWAIT);
-                                if (retval != sizeof(synchro4self) - 1) {
+                                l1(OUTPUT_TYPE_DEBUG, "[%d] sending self synchro", dest);
+                                if (ws_is_websocket(dest))
+                                        retval = (ws_send(dest, synchro4self, sizeof(synchro4self) - 1) < 0) ? -1 : (ssize_t)(sizeof(synchro4self) - 1);
+                                else
+                                        retval = send(dest, synchro4self, sizeof(synchro4self) - 1, MSG_NOSIGNAL|MSG_DONTWAIT);
+                                if (retval != (ssize_t)(sizeof(synchro4self) - 1)) {
                                         if (retval != -1) {
                                                 l4(OUTPUT_TYPE_INFO, "[%d] short send of %zd instead of %zd bytes from %d - destination is not reading data "
                                                                      "(illegal FB client) or our upload bandwidth is saturated - sorry, cannot continue serving "
                                                                      "this client in this situation, closing connection",
-                                                                     g->players_conn[i], retval, sizeof(synchro4self) - 1, fd);
+                                                                     dest, retval, sizeof(synchro4self) - 1, fd);
                                         }
-                                        conn_to_terminate = g_list_append(conn_to_terminate, GINT_TO_POINTER(g->players_conn[i]));
+                                        conn_to_terminate = g_list_append(conn_to_terminate, GINT_TO_POINTER(dest));
                                 }
 
                         } else if (g->players_conn[i] != fd) {
                                 ssize_t retval;
-                                l3(OUTPUT_TYPE_DEBUG, "[%d] sending %zd bytes to %d", fd, len, g->players_conn[i]);
-                                retval = send(g->players_conn[i], msg, len, MSG_NOSIGNAL|MSG_DONTWAIT);
+                                int dest = g->players_conn[i];
+                                l3(OUTPUT_TYPE_DEBUG, "[%d] sending %zd bytes to %d", fd, len, dest);
+                                if (ws_is_websocket(dest))
+                                        retval = (ws_send(dest, msg, (int)len) < 0) ? -1 : len;
+                                else
+                                        retval = send(dest, msg, len, MSG_NOSIGNAL|MSG_DONTWAIT);
                                 if (retval != len) {
                                         if (retval != -1) {
                                                 l4(OUTPUT_TYPE_INFO, "[%d] short send of %zd instead of %zd bytes from %d - destination is not reading data "
                                                                      "(illegal FB client) or our upload bandwidth is saturated - sorry, cannot continue serving "
                                                                      "this client in this situation, closing connection",
-                                                                     g->players_conn[i], retval, len, fd);
+                                                                     dest, retval, len, fd);
                                         }
-                                        conn_to_terminate = g_list_append(conn_to_terminate, GINT_TO_POINTER(g->players_conn[i]));
+                                        conn_to_terminate = g_list_append(conn_to_terminate, GINT_TO_POINTER(dest));
                                 }
                         }
                 }

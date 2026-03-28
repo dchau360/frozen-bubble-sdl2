@@ -218,10 +218,35 @@ void NetworkClient::Update() {
 }
 
 bool NetworkClient::SendGameData(const char* data) {
-    // In WASM the binary {id_byte}{data}\n TCP protocol is replaced by a
-    // text WebSocket message. Server-side WebSocket proxy handles routing.
-    if (state != CONNECTED && state != IN_GAME) return false;
-    return SendCommand(data);
+    // Prio (in-game) messages use the same binary format as the TCP client:
+    //   byte 0  = myPlayerId  (server fd, identifies sender to other clients)
+    //   bytes 1+ = {data}\n
+    // Sent as a WebSocket binary frame so the server passes it to process_msg_prio
+    // (not process_msg, which requires the "FB/1.2 " text-protocol prefix).
+    WebSocketHandle* handle = (WebSocketHandle*)websocketSocket;
+    if (!handle || handle->socket <= 0) return false;
+    if (state != IN_GAME) return false;
+    if (myPlayerId == 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Player ID not set - cannot send game data");
+        return false;
+    }
+
+    char buffer[BUFFER_SIZE];
+    buffer[0] = (char)myPlayerId;
+    int msgLen = snprintf(buffer + 1, (int)sizeof(buffer) - 2, "%s\n", data);
+    int totalLen = 1 + msgLen;
+
+    bool isPing = (strcmp(data, "p") == 0);
+    if (!isPing) {
+        SDL_Log(">>> Sending game data: [ID=%d] %s (%d bytes)", (int)myPlayerId, data, totalLen);
+    }
+
+    EMSCRIPTEN_RESULT result = emscripten_websocket_send_binary(handle->socket, buffer, totalLen);
+    if (result != EMSCRIPTEN_RESULT_SUCCESS) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to send game data: %d", result);
+        return false;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------------------
