@@ -149,6 +149,9 @@ FrozenBubble::FrozenBubble() {
     }
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    // Suppress SDL_LOG_CATEGORY_ERROR debug-level messages (SDL Metal renderer emits
+    // "Parameter 'texture' is invalid" at DEBUG priority during internal initialization).
+    SDL_LogSetPriority(SDL_LOG_CATEGORY_ERROR, SDL_LOG_PRIORITY_WARN);
     SDL_RenderSetLogicalSize(renderer, 640, 480);
 
     if(!renderer) {
@@ -164,7 +167,6 @@ FrozenBubble::FrozenBubble() {
 
     audMixer = AudioMixer::Instance();
     hiscoreManager = HighscoreManager::Instance(renderer);
-
     init_effects((char*)g_dataDir.c_str());
     mainMenu = new MainMenu(renderer);
     mainGame = new BubbleGame(renderer);
