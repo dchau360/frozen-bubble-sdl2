@@ -54,6 +54,7 @@ void reread();
 
 int conns_nb(void);
 void add_prio(int fd);
+void remove_prio(int fd);  /* Move fd from prio (in-game) back to normal lobby mode */
 
 #ifdef DEBUG
 void net_debug(void);

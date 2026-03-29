@@ -611,6 +611,20 @@ void add_prio(int fd)
         }
 }
 
+/* Move fd from prio (in-game) mode back to normal lobby (conns) mode.
+ * Called when a player voluntarily sends PART while in-game, so subsequent
+ * lobby commands (LIST, JOIN, CREATE) are processed with the normal gracetime
+ * instead of the 5-second in-game gracetime.  Also prevents duplicate entries
+ * in conns_prio if the same fd later calls add_prio for a new game. */
+void remove_prio(int fd)
+{
+        /* Remove from the iteration copy — this becomes conns_prio at end of tick */
+        new_conns = g_list_remove(new_conns, GINT_TO_POINTER(fd));
+        prio[fd] = 0;
+        /* Move to normal lobby list so subsequent LIST/JOIN commands work */
+        conns = g_list_append(conns, GINT_TO_POINTER(fd));
+}
+
 void close_server() {
         if (tcp_server_socket != -1) {
                 SOCKET_CLOSE(tcp_server_socket);

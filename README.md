@@ -186,6 +186,19 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ---
 
+## New in v2.4.8
+
+- **WebAssembly: swap creators fixed** — after a game ends, the server now moves the player's connection back to normal lobby mode (was left in in-game prio mode), preventing the 5-second prio gracetime and duplicate prio entry on the next game
+- **WebAssembly: round 2+ sync fixed** — browser client now waits for all 40 sync messages to queue up before starting each new round, same as the round 1 fix in v2.4.7
+
+---
+
+## New in v2.4.7
+
+- **WebAssembly: game join fixed** — browser client now waits for all 40 level-sync messages to queue up before entering the game, preventing the immediate disconnect when macOS hosts and web client joins
+
+---
+
 ## New in v2.4.6
 
 - **Menu animation fix** — graphics quality icon no longer attempts to load missing frames at startup (off-by-one in frame count guard)

@@ -713,6 +713,7 @@ int process_msg(int fd, char* msg)
                         send_line_log(fd, wn_not_in_game, msg_orig);
                 } else {
                         player_part_game(fd);
+                        remove_prio(fd);  /* return fd to lobby mode; prevents 5-sec prio gracetime and duplicate add_prio on rejoin */
                         send_ok(fd, msg_orig);
                 }
         } else if (streq(current_command, "LIST")) {

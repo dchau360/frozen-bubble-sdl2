@@ -3437,6 +3437,22 @@ void BubbleGame::Render() {
 
         // Check if both players are ready for new game after round ends
         if (waitingForOpponentNewGame && opponentReadyForNewGame) {
+#ifdef __WASM_PORT__
+            // WASM joiner: WaitForBubble inside ReloadGame->SyncNetworkLevel cannot yield,
+            // so queue the 40 sync messages first (same fix as initial game start).
+            NetworkClient* netClientRound = NetworkClient::Instance();
+            if (netClientRound && !netClientRound->IsLeader()) {
+                if (wasmRoundSyncWaitStart == 0) wasmRoundSyncWaitStart = SDL_GetTicks();
+                size_t qSize = netClientRound->MessageQueueSize();
+                bool timedOut = (SDL_GetTicks() - wasmRoundSyncWaitStart > 5000);
+                SDL_Log("WASM round sync wait: queue=%d waited=%dms", (int)qSize, (int)(SDL_GetTicks() - wasmRoundSyncWaitStart));
+                if (qSize < 40 && !timedOut) {
+                    return;  // come back next frame
+                }
+                SDL_Log("WASM round sync: proceeding queue=%d timedOut=%d", (int)qSize, timedOut);
+                wasmRoundSyncWaitStart = 0;
+            }
+#endif
             SDL_Log("All players ready - starting new game (detected in render loop)");
             waitingForOpponentNewGame = false;
             opponentReadyForNewGame = false;
