@@ -1941,6 +1941,10 @@ void MainMenu::NetPanelRender() {
 
     // If in lobby, use world map background; otherwise use void panel for connection screens
     if (networkInLobby && netGameBackground && networkInputMode == 0) {
+        // Reset text color to white — non-lobby screens (connecting, server list) may have
+        // left panelText set to yellow, which persists across frames.
+        panelText.UpdateColor({255, 255, 255, 255}, {0, 0, 0, 255});
+
         // Request LIST periodically (every 2 seconds)
         Uint32 now = SDL_GetTicks();
         if (now - lastListRequest > 500) {

@@ -186,6 +186,14 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ---
 
+## New in v2.4.5
+
+- **WebAssembly: join game fixed** — browser client now correctly joins multiplayer game rooms; macOS host can see the web player join
+- **WebAssembly: join retry** — JOIN command automatically retries with a name suffix if the nickname is already in use (mirrors the existing CREATE retry behaviour)
+- **Game room chat text color** — fixed chat messages appearing yellow on the web client
+
+---
+
 ## New in v2.4.4
 
 - **WebAssembly: public server list** — itch.io browser version now fetches and displays the public server list on the Net Game screen
