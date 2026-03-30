@@ -2754,6 +2754,19 @@ void BubbleGame::SendMalusToOpponent(int malusCount) {
     }
 
     // Single player targeting mode: send all malus to one opponent (original lines 1217-1227)
+    // When enabled, if no manual target is selected (sendMalusToOne == -1), auto-pick the
+    // first living opponent so the setting actually focuses fire instead of splitting.
+    if (currentSettings.singlePlayerTargetting) {
+        if (sendMalusToOne == -1 ||
+            sendMalusToOne >= currentSettings.playerCount ||
+            bubbleArrays[sendMalusToOne].playerState != BubbleArray::PlayerState::ALIVE) {
+            sendMalusToOne = -1;
+            for (int idx : livingOpponents) {
+                sendMalusToOne = idx;
+                break;
+            }
+        }
+    }
     if (currentSettings.singlePlayerTargetting && sendMalusToOne != -1) {
         if (sendMalusToOne < currentSettings.playerCount &&
             bubbleArrays[sendMalusToOne].playerState == BubbleArray::PlayerState::ALIVE) {

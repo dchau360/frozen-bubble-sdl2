@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.13
+
+- **Single player targeting fixed** — when the "Single player targeting" lobby setting is on, malus now automatically focuses on one opponent instead of splitting; manual keys 1–4 still override the auto-selection
+- **Ghost player fix** — reconnecting with the same nickname no longer shows duplicate entries in the server lobby (stale connection is evicted immediately)
+- **Android default nickname** — default nickname on Android TV is now `android_user` instead of `unnamed`
+
 ## v2.4.12
 
 - **Game Speed setting** — adjustable in Settings → Keys; use LEFT/RIGHT on the "Game Speed" row to set 1.0–5.0×; saved per device to settings.ini

@@ -180,15 +180,8 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ---
 
-## Known Issues
-
-- **Single-player malus targeting** — Attack bubbles in single-player mode use a placeholder targeting strategy; not yet matched to original game behavior.
-
----
-
 ## TODO
 
-- [ ] Implement single-player malus targeting to match original Perl behavior
 - [ ] Sign macOS `.app` bundle for Gatekeeper compatibility
 - [ ] Sign Windows installer for SmartScreen compatibility
 
@@ -218,7 +211,7 @@ Features ported from the original Frozen Bubble 2 Perl source:
 | Aim guide (trajectory preview) | ✅ (added beyond original) |
 | Local multiplayer (2 players, controllers) | ✅ |
 | Local multiplayer (3–5 players, controllers) | ⏳ (WIP) |
-| Single-player malus targeting logic | ⏳ (placeholder) |
+| Single-player malus targeting logic | ✅ |
 | macOS, Windows, Android TV, WebAssembly | ✅ (original was Linux-only) |
 
 ---
