@@ -188,6 +188,12 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ---
 
+## New in v2.4.9
+
+- **Frame-rate-independent speed** — bubble and launcher movement now scale with delta time on all platforms; browser builds (WebAssembly) run at 1.25× speed normalized across all frame rates so 30 fps iPhone and 120 fps desktop feel the same; native builds (macOS, Linux, Windows, Android TV) run at 1.5× speed
+
+---
+
 ## New in v2.4.8
 
 - **WebAssembly: swap creators fixed** — after a game ends, the server now correctly moves the player's connection back to normal lobby mode (previously left in in-game priority mode), preventing the 5-second in-game timeout and stale duplicate entries when starting a new game with swapped roles

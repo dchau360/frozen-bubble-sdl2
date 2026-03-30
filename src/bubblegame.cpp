@@ -86,13 +86,14 @@ struct SingleBubble {
     }
 
     void UpdatePosition() {
+        float ds = FrozenBubble::Instance()->deltaScale;
         if (launching) {
             // Update old positions
             oldPosX = posX;
             oldPosY = posY;
 
-            float dx = ((float)BUBBLE_SPEED) * cosf(direction);
-            float dy = ((float)BUBBLE_SPEED) * sinf(direction);
+            float dx = ((float)BUBBLE_SPEED) * cosf(direction) * ds;
+            float dy = ((float)BUBBLE_SPEED) * sinf(direction) * ds;
 
             // Update float positions
             posX += dx;  // Move in direction of angle (cos gives correct sign)
@@ -122,9 +123,9 @@ struct SingleBubble {
             else {
                 if (!chainExists) {
                     // Falling bubbles should have both horizontal and vertical movement
-                    posX += speedX * 0.5;
-                    posY += genSpeed * 0.5;
-                    genSpeed += FREEFALL_CONSTANT * 0.5;
+                    posX += speedX * 0.5 * ds;
+                    posY += genSpeed * 0.5 * ds;
+                    genSpeed += FREEFALL_CONSTANT * 0.5 * ds;
                     pos.x = (int)posX;
                     pos.y = (int)posY;
                 }
@@ -159,16 +160,16 @@ struct SingleBubble {
                         }
 
                         // Apply physics: decelerate (going up), then accelerate (falling back down)
-                        genSpeed -= acceleration;
-                        posX += speedX;
+                        genSpeed -= acceleration * ds;
+                        posX += speedX * ds;
 
                         // Stop horizontal movement if we've reached destination X
-                        if (fabs(posX - chainDest.x) < fabs(speedX)) {
+                        if (fabs(posX - chainDest.x) < fabs(speedX * ds)) {
                             posX = chainDest.x;
                             speedX = 0;
                         }
 
-                        posY += genSpeed;
+                        posY += genSpeed * ds;
 
                         // Check if reached destination Y (going upward, so Y decreases)
                         // Trigger when we've reached or passed the target
@@ -184,8 +185,8 @@ struct SingleBubble {
                         pos.y = (int)posY;
                     } else {
                         // Before reaching maxy threshold, just fall normally
-                        posY += genSpeed;
-                        genSpeed += FREEFALL_CONSTANT * 0.5;
+                        posY += genSpeed * ds;
+                        genSpeed += FREEFALL_CONSTANT * 0.5 * ds;
                         pos.x = (int)posX;
                         pos.y = (int)posY;
                     }
@@ -1682,17 +1683,19 @@ void BubbleGame::UpdatePenguin(BubbleArray &bArray) {
     if (angle > PI-0.1) angle = PI-0.1;
 
     if (bArray.shooterLeft || bArray.shooterRight || bArray.shooterCenter) {
+        float ds = FrozenBubble::Instance()->deltaScale;
+        float launchStep = (float)LAUNCHER_SPEED * ds;
         if (bArray.shooterLeft) {
-            angle += LAUNCHER_SPEED;  // Move LEFT = increase angle (toward π)
+            angle += launchStep;  // Move LEFT = increase angle (toward π)
             if(penguin.curAnimation != 1 && (penguin.curAnimation > 7 || penguin.curAnimation < 2)) penguin.PlayAnimation(2);
         }
         else if (bArray.shooterRight) {
-            angle -= LAUNCHER_SPEED;  // Move RIGHT = decrease angle (toward 0)
+            angle -= launchStep;  // Move RIGHT = decrease angle (toward 0)
             if(penguin.curAnimation != 1 && (penguin.curAnimation > 7 || penguin.curAnimation < 2)) penguin.PlayAnimation(5);
         }
         else if (bArray.shooterCenter) {
-            if (angle >= PI/2.0f - LAUNCHER_SPEED && angle <= PI/2.0f + LAUNCHER_SPEED) angle = PI/2.0f;
-            else angle += (angle < PI/2.0f) ? LAUNCHER_SPEED : -LAUNCHER_SPEED;
+            if (angle >= PI/2.0f - launchStep && angle <= PI/2.0f + launchStep) angle = PI/2.0f;
+            else angle += (angle < PI/2.0f) ? launchStep : -launchStep;
         }
 
         penguin.sleeping = 0;

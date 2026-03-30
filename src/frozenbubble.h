@@ -49,6 +49,11 @@ class FrozenBubble
 public:
     int totalBubbles = 0;
     Uint32 startTime = 0;
+
+    // Delta-time scale: 1.0 at 60 fps, 2.0 at 30 fps, etc.
+    // All per-frame movement amounts are multiplied by this so the game
+    // runs at the same real-time speed regardless of frame rate.
+    float deltaScale = 1.0f;
     void CallMenuReturn() { mainMenu->ReturnToMenu(); };
     void CallNetLobbyReturn() { mainMenu->ReturnToNetLobby(); };
     void CallGameQuit() { IsGameQuit = true; };
