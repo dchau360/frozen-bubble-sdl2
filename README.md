@@ -188,9 +188,15 @@ Or right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ---
 
+## New in v2.4.10
+
+- **Browser speed tuned** — WebAssembly speed multiplier increased to 2.0× (normalized across all frame rates); matches the fast feel of 120 fps play
+
+---
+
 ## New in v2.4.9
 
-- **Frame-rate-independent speed** — bubble and launcher movement now scale with delta time on all platforms; browser builds (WebAssembly) run at 1.25× speed normalized across all frame rates so 30 fps iPhone and 120 fps desktop feel the same; native builds (macOS, Linux, Windows, Android TV) run at 1.5× speed
+- **Frame-rate-independent speed** — bubble and launcher movement now scale with delta time on all platforms; browser builds (WebAssembly) run normalized across all frame rates; native builds (macOS, Linux, Windows, Android TV) run at 1.5× speed
 
 ---
 
