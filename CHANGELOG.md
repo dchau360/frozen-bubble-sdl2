@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.14
+
+- **Xbox controller: continue round fixed** — pressing A on an Xbox controller after a round ends now correctly continues to the next round in local multiplayer
+
 ## v2.4.13
 
 - **Single player targeting fixed** — when the "Single player targeting" lobby setting is on, malus now automatically focuses on one opponent instead of splitting; manual keys 1–4 still override the auto-selection

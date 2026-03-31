@@ -3989,12 +3989,16 @@ void BubbleGame::HandleInput(SDL_Event *e) {
         if (currentSettings.localMultiplayer) {
             // In local multiplayer, per-player movement is polled directly in UpdatePenguin.
             // Only handle global buttons (B=quit, START=pause) via fake key events.
+            // A button also handled when game is finished so players can continue to next round.
             SDL_KeyboardEvent fake{};
             fake.type = SDL_KEYDOWN;
             fake.state = SDL_PRESSED;
             switch (e->cbutton.button) {
                 case SDL_CONTROLLER_BUTTON_B:     fake.keysym.sym = SDLK_ESCAPE; break;
                 case SDL_CONTROLLER_BUTTON_START: fake.keysym.sym = SDLK_p; break;
+                case SDL_CONTROLLER_BUTTON_A:
+                    if (gameFinish) { fake.keysym.sym = SDLK_SPACE; break; }
+                    return;
                 default: return;
             }
             SDL_Event fakeEvent;
