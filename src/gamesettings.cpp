@@ -232,6 +232,10 @@ void GameSettings::LoadDefaultKeys()
 
 void GameSettings::SaveKeys()
 {
+    // Ensure the [Keys] section header exists in the dict before writing any keys.
+    // iniparser_dump_ini only outputs keys under sections that have a header entry.
+    iniparser_set(optDict, "Keys", NULL);
+
     char speedBuf[16];
     snprintf(speedBuf, sizeof(speedBuf), "%.2f", speedMultiplier);
     iniparser_set(optDict, "Keys:SpeedMultiplier", speedBuf);
