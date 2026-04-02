@@ -30,6 +30,7 @@
 #include <ctype.h>
 #include <sys/socket.h>
 #include <regex.h>
+#include <time.h>
 
 #include <glib.h>
 
@@ -623,6 +624,18 @@ int process_msg(int fd, char* msg)
                                         free(nick[fd]);
                                 }
                                 nick[fd] = strdup(args);
+                                // Log nick + IP + timestamp to joiners file
+                                {
+                                        FILE *jf = fopen("joiners.log", "a");
+                                        if (jf) {
+                                                time_t now = time(NULL);
+                                                struct tm *tm_info = gmtime(&now);
+                                                char tbuf[32];
+                                                strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S UTC", tm_info);
+                                                fprintf(jf, "%s  %-15s  %s\n", tbuf, IP[fd] ? IP[fd] : "unknown", nick[fd]);
+                                                fclose(jf);
+                                        }
+                                }
                                 // Evict any stale open_players entry with the same nick (ghost player fix).
                                 // When a player reconnects after a silent TCP drop, the old fd stays in
                                 // open_players until gracetime fires, causing duplicate entries in LIST.
