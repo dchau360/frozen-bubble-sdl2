@@ -19,6 +19,12 @@
 
 #include "platform.h"
 #include <SDL2/SDL.h>
+#if defined(_WIN32) || defined(__MINGW32__)
+#include <windows.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <climits>
+#endif
 
 std::string g_dataDir;
 
@@ -89,6 +95,39 @@ void InitDataDir() {
 #else // Desktop platforms
 
 void InitDataDir() {
+#if defined(_WIN32) || defined(__MINGW32__)
+    char exePath[MAX_PATH];
+    if (GetModuleFileNameA(nullptr, exePath, MAX_PATH)) {
+        std::string dir(exePath);
+        size_t sep = dir.find_last_of("\\/");
+        if (sep != std::string::npos) dir = dir.substr(0, sep);
+        g_dataDir = dir + "\\share";
+        return;
+    }
+#elif defined(__APPLE__)
+    {
+        const char* base = SDL_GetBasePath();
+        if (base) {
+            std::string b(base);
+            if (b.size() >= 10 && b.substr(b.size() - 10) == "Resources/") {
+                g_dataDir = b + "share";
+                return;
+            }
+        }
+    }
+#elif defined(__linux__)
+    char exePath[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+    if (len > 0) {
+        exePath[len] = '\0';
+        std::string dir(exePath);
+        size_t bin = dir.rfind("/bin/");
+        if (bin != std::string::npos) {
+            g_dataDir = dir.substr(0, bin) + "/share/frozen-bubble";
+            return;
+        }
+    }
+#endif
     g_dataDir = DATA_DIR;
 }
 
